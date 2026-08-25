@@ -38,9 +38,6 @@ export const Navbar = ({
               <span className="text-base font-bold tracking-tight text-white">
                 Proxmox <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Bot Host</span>
               </span>
-              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
-                Netlify Ready
-              </span>
             </div>
             <p className="text-xs text-zinc-400">Discord Bot Self-Hosting Panel</p>
           </div>

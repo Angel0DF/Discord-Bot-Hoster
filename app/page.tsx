@@ -182,7 +182,7 @@ export default function Home() {
                   }`}
                 >
                   <Server className="h-4 w-4" />
-                  Guida Proxmox & Netlify
+                  Guida Proxmox
                 </button>
               </div>
 
