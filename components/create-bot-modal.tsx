@@ -128,7 +128,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
         runtime = "python";
         mainFile = uploadedFiles.find((f) => f.name.endsWith("main.py") || f.name.endsWith("bot.py"))?.name || "main.py";
       } else if (uploadedFiles.some((f) => f.name.endsWith(".js") || f.name.endsWith(".ts"))) {
-        runtime = "node";
+        runtime = "nodejs";
         mainFile = uploadedFiles.find((f) => f.name.endsWith("index.js") || f.name.endsWith("bot.js") || f.name.endsWith("main.js"))?.name || "index.js";
       }
 
@@ -167,13 +167,14 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
           type="file"
           ref={fileInputRef}
           multiple
-          onChange={(e) => {
+          onChange={async (e) => {
             if (e.target.files) {
               const list: UploadedFileItem[] = [];
-              Array.from(e.target.files).forEach(async (f) => {
+              for (let i = 0; i < e.target.files.length; i++) {
+                const f = e.target.files[i];
                 const text = await f.text();
                 list.push({ name: f.name, content: text });
-              });
+              }
               setUploadedFiles((prev) => [...prev, ...list]);
             }
           }}
