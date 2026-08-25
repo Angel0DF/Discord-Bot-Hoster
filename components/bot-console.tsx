@@ -34,8 +34,8 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
       fallbackInterval = setInterval(async () => {
         try {
           const res = await ApiClient.getBot(bot.id);
-          if (res.success && res.bot && Array.isArray(res.bot.logs)) {
-            setLogs(res.bot.logs);
+          if (res && Array.isArray(res.logs)) {
+            setLogs(res.logs);
             setIsConnected(true);
           }
         } catch {
