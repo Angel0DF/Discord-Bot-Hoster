@@ -1,0 +1,13 @@
+services:
+  discord-bot-agent:
+    build: .
+    container_name: discord-bot-agent
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - AGENT_SECRET_KEY=la_tua_password_segreta
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
