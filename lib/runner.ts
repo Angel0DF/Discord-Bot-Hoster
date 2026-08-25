@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import pidusage from 'pidusage';
 import { BotConfig, BotState, BotStatus } from './types';
-import { getBotById, getAllBots, BOTS_STORAGE_DIR } from './storage';
+import { getBotById, getAllBots, saveBots, BOTS_STORAGE_DIR } from './storage';
 
 interface ActiveProcess {
   process: ChildProcess;
