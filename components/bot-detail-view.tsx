@@ -97,7 +97,7 @@ export const BotDetailView = ({
         />
       )}
 
-      {activeTab === "files" && <FileEditor botId={bot.id} />}
+      {activeTab === "files" && <FileEditor botId={bot.id} botName={bot.config.name} />}
 
       {activeTab === "env" && (
         <EnvEditor

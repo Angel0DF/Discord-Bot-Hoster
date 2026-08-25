@@ -7,10 +7,10 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "adm-zip": "^0.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "pidusage": "^3.0.2"
   }
 }
-

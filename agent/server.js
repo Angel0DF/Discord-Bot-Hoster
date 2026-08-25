@@ -4,8 +4,10 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 const pidusage = require('pidusage');
+let AdmZip;
+try { AdmZip = require('adm-zip'); } catch {}
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -501,8 +503,9 @@ app.get('/api/bots/:id/files', (req, res) => {
 
 app.post('/api/bots/:id/files', (req, res) => {
   const { id } = req.params;
-  const { path: filePath, content, isDirectory, action } = req.body;
-  const target = path.join(BOTS_DIR, id, filePath);
+  const { path: filePath, content, isDirectory, action, encoding, isBinary, deleteAfter } = req.body;
+  const botDir = path.join(BOTS_DIR, id);
+  const target = path.join(botDir, filePath);
 
   if (action === 'delete') {
     if (fs.existsSync(target)) {
@@ -513,13 +516,57 @@ app.post('/api/bots/:id/files', (req, res) => {
     return res.status(404).json({ success: false });
   }
 
+  if (action === 'unzip') {
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ success: false, error: 'Archivio non trovato' });
+    }
+    const destDir = path.dirname(target);
+    try {
+      const ext = path.extname(target).toLowerCase();
+      if (ext === '.zip') {
+        if (AdmZip) {
+          const zip = new AdmZip(target);
+          zip.extractAllTo(destDir, true);
+        } else if (process.platform === 'win32') {
+          execSync(`powershell -Command "Expand-Archive -Path '${target}' -DestinationPath '${destDir}' -Force"`);
+        } else {
+          execSync(`unzip -o "${target}" -d "${destDir}"`);
+        }
+      } else if (ext === '.tar' || ext === '.gz' || ext === '.tgz') {
+        execSync(`tar -xf "${target}" -C "${destDir}"`);
+      } else if (ext === '.rar') {
+        try {
+          execSync(`unrar x -o+ "${target}" "${destDir}"`);
+        } catch {
+          try {
+            execSync(`7z x -y "${target}" -o"${destDir}"`);
+          } catch (e) {
+            return res.status(500).json({ success: false, error: 'Impossibile estrarre file RAR. Installa unrar o 7zip sul server.' });
+          }
+        }
+      }
+
+      if (deleteAfter !== false) {
+        try { fs.unlinkSync(target); } catch {}
+      }
+      return res.json({ success: true, message: 'Archivio decompresso con successo' });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   if (isDirectory) {
     fs.mkdirSync(target, { recursive: true });
     return res.json({ success: true });
   }
 
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content ?? '', 'utf8');
+  if (isBinary || encoding === 'base64') {
+    const buffer = Buffer.from(content, 'base64');
+    fs.writeFileSync(target, buffer);
+  } else {
+    fs.writeFileSync(target, content ?? '', 'utf8');
+  }
   res.json({ success: true });
 });
 

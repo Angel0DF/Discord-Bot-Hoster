@@ -102,6 +102,24 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Elemento non trovato' }, { status: 404 });
     }
 
+    if (action === 'unzip') {
+      if (!fs.existsSync(targetPath)) {
+        return NextResponse.json({ success: false, error: 'Archivio non trovato' }, { status: 404 });
+      }
+      const destDir = path.dirname(targetPath);
+      try {
+        const AdmZip = (await import('adm-zip')).default;
+        const zip = new AdmZip(targetPath);
+        zip.extractAllTo(destDir, true);
+        if (body.deleteAfter !== false) {
+          try { fs.unlinkSync(targetPath); } catch {}
+        }
+        return NextResponse.json({ success: true, message: 'Archivio estratto con successo' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+      }
+    }
+
     if (isDirectory) {
       if (!fs.existsSync(targetPath)) {
         fs.mkdirSync(targetPath, { recursive: true });
@@ -115,7 +133,13 @@ export async function POST(
       fs.mkdirSync(parentDir, { recursive: true });
     }
 
-    fs.writeFileSync(targetPath, content ?? '', 'utf8');
+    if (body.isBinary || body.encoding === 'base64') {
+      const buffer = Buffer.from(content, 'base64');
+      fs.writeFileSync(targetPath, buffer);
+    } else {
+      fs.writeFileSync(targetPath, content ?? '', 'utf8');
+    }
+
     return NextResponse.json({ success: true, message: 'File salvato con successo' });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

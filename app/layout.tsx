@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { UploadProvider } from "@/context/upload-context";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -17,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="it" className="dark">
       <body className="min-h-screen bg-[#08090d] text-zinc-100 antialiased selection:bg-indigo-500 selection:text-white">
-        {children}
+        <UploadProvider>{children}</UploadProvider>
       </body>
     </html>
   );
