@@ -20,6 +20,18 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR, { recursive: true });
 if (!fs.existsSync(BOTS_FILE)) fs.writeFileSync(BOTS_FILE, JSON.stringify([], null, 2));
 
+// CORS and Preflight handling
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-agent-secret');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
@@ -30,7 +42,8 @@ const MAX_LOG_LINES = 1000;
 
 // Middleware for authentication
 app.use((req, res, next) => {
-  // Allow health/ping without auth or with optional auth
+  // Allow OPTIONS preflight and health ping without auth
+  if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
 
   const authHeader = req.headers['authorization'] || req.headers['x-agent-secret'];
@@ -414,6 +427,8 @@ app.get('/api/bots/:id/logs', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
 
   const active = activeProcesses.get(id);
   const initialLogs = active ? active.logs : [];
