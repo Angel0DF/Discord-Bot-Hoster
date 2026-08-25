@@ -279,6 +279,14 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
       }
     }, 2000);
 
+    // Persist enabled state
+    const allBots = getAllBots();
+    const bIndex = allBots.findIndex((b) => b.id === botId);
+    if (bIndex !== -1) {
+      (allBots[bIndex] as any).enabled = true;
+      saveBots(allBots);
+    }
+
     return { success: true, message: 'Bot avviato con successo' };
   } catch (error: any) {
     broadcastLog(botId, `❌ [Host Manager] Errore: ${error?.message || error}`);
@@ -287,6 +295,14 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
 }
 
 export async function stopBot(botId: string): Promise<{ success: boolean; message: string }> {
+  // Persist disabled state
+  const allBots = getAllBots();
+  const bIndex = allBots.findIndex((b) => b.id === botId);
+  if (bIndex !== -1) {
+    (allBots[bIndex] as any).enabled = false;
+    saveBots(allBots);
+  }
+
   const active = activeBots.get(botId);
   if (!active || !active.process || active.status === 'offline') {
     return { success: true, message: 'Il bot è già offline' };
@@ -351,3 +367,24 @@ export function clearBotLogs(botId: string): void {
     active.logs = [];
   }
 }
+
+// Auto-boot sequence: restore and auto-start all enabled bots on server start/reboot
+let isAutoBootStarted = false;
+function triggerAutoBoot() {
+  if (isAutoBootStarted) return;
+  isAutoBootStarted = true;
+  setTimeout(() => {
+    try {
+      const all = getAllBots();
+      all.forEach((bot: any) => {
+        if (bot.enabled !== false && bot.autoRestart !== false) {
+          startBot(bot.id);
+        }
+      });
+    } catch {}
+  }, 2000);
+}
+
+// Trigger auto-boot when module loads
+triggerAutoBoot();
+
