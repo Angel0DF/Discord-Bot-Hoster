@@ -19,7 +19,11 @@ import {
   UploadCloud,
   Upload,
   FolderOpen,
+  Archive,
+  FileArchive,
+  Sparkles,
 } from "lucide-react";
+import JSZip from "jszip";
 
 import { ApiClient } from "@/lib/api-client";
 
@@ -29,7 +33,8 @@ interface FileEditorProps {
 
 interface UploadQueueItem {
   relativePath: string;
-  file: globalThis.File;
+  file?: globalThis.File;
+  content?: string;
 }
 
 export const FileEditor = ({ botId }: FileEditorProps) => {
@@ -45,6 +50,7 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
   const [showCreateModal, setShowCreateModal] = useState<"file" | "folder" | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [isExtracting, setIsExtracting] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +171,21 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     }
   };
 
+  // Unpack a zip file directly in the browser
+  const extractZipFile = async (zipFile: globalThis.File): Promise<UploadQueueItem[]> => {
+    const queue: UploadQueueItem[] = [];
+    const zip = new JSZip();
+    const loadedZip = await zip.loadAsync(zipFile);
+
+    for (const [filename, fileData] of Object.entries(loadedZip.files)) {
+      if (!fileData.dir) {
+        const text = await fileData.async("string");
+        queue.push({ relativePath: filename, content: text });
+      }
+    }
+    return queue;
+  };
+
   // Helper for recursive directory traversal in drag and drop
   const traverseFileSystemEntry = async (
     entry: any,
@@ -176,6 +197,18 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
       const file: globalThis.File = await new Promise((resolve, reject) => {
         entry.file(resolve, reject);
       });
+
+      // If it's a zip file, unpack it automatically
+      if (file.name.toLowerCase().endsWith(".zip")) {
+        try {
+          const unzipped = await extractZipFile(file);
+          results.push(...unzipped);
+          return results;
+        } catch {
+          // fallback to raw file if parse fails
+        }
+      }
+
       const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
       results.push({ relativePath, file });
     } else if (entry.isDirectory) {
@@ -208,12 +241,12 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
 
   const uploadQueue = async (items: UploadQueueItem[]) => {
     setIsDragging(false);
-    setUploadStatus(`Caricamento di ${items.length} file e sottocartelle in corso...`);
+    setUploadStatus(`Caricamento di ${items.length} file...`);
 
     let count = 0;
     for (const item of items) {
       try {
-        const content = await item.file.text();
+        const content = item.content !== undefined ? item.content : await item.file!.text();
         const fullTarget = currentPath
           ? `${currentPath}/${item.relativePath}`
           : item.relativePath;
@@ -229,7 +262,7 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
       }
     }
 
-    setUploadStatus(`✅ ${count} file caricati mantenendo la struttura delle cartelle!`);
+    setUploadStatus(`✅ ${count} file caricati ed estratti con successo!`);
     setTimeout(() => setUploadStatus(null), 3500);
     await fetchFiles(currentPath);
   };
@@ -266,10 +299,34 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         }
       } else if (item.kind === "file") {
         const f = item.getAsFile();
-        if (f) queue.push({ relativePath: f.name, file: f });
+        if (f) {
+          if (f.name.toLowerCase().endsWith(".zip")) {
+            const unzipped = await extractZipFile(f);
+            queue.push(...unzipped);
+          } else {
+            queue.push({ relativePath: f.name, file: f });
+          }
+        }
       }
     }
 
+    if (queue.length > 0) {
+      await uploadQueue(queue);
+    }
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const queue: UploadQueueItem[] = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      const file = e.target.files[i];
+      if (file.name.toLowerCase().endsWith(".zip")) {
+        const unzipped = await extractZipFile(file);
+        queue.push(...unzipped);
+      } else {
+        queue.push({ relativePath: file.name, file });
+      }
+    }
     if (queue.length > 0) {
       await uploadQueue(queue);
     }
@@ -280,7 +337,6 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     const queue: UploadQueueItem[] = [];
     for (let i = 0; i < e.target.files.length; i++) {
       const file = e.target.files[i];
-      // webkitRelativePath contains the full relative path inside the folder
       const relativePath = (file as any).webkitRelativePath || file.name;
       queue.push({ relativePath, file });
     }
@@ -289,8 +345,14 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     }
   };
 
+  const isArchiveFile = (name: string) => {
+    const lower = name.toLowerCase();
+    return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".tar.gz") || lower.endsWith(".tgz") || lower.endsWith(".tar");
+  };
+
   const getFileIcon = (name: string, isDirectory: boolean) => {
     if (isDirectory) return <Folder className="h-4 w-4 text-indigo-400" />;
+    if (isArchiveFile(name)) return <FileArchive className="h-4 w-4 text-amber-400" />;
     if (name.endsWith(".js") || name.endsWith(".ts")) return <FileCode className="h-4 w-4 text-amber-400" />;
     if (name.endsWith(".py")) return <FileCode className="h-4 w-4 text-blue-400" />;
     if (name.endsWith(".json")) return <FileJson className="h-4 w-4 text-emerald-400" />;
@@ -308,20 +370,13 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
       onDrop={handleDrop}
       className="relative flex h-[580px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl transition-all"
     >
-      {/* Hidden file input */}
+      {/* Hidden file input with .zip and .rar support */}
       <input
         type="file"
         ref={fileInputRef}
         multiple
-        onChange={(e) => {
-          if (e.target.files) {
-            const queue = Array.from(e.target.files).map((file) => ({
-              relativePath: file.name,
-              file,
-            }));
-            uploadQueue(queue);
-          }
-        }}
+        accept=".zip,.rar,.tar,.gz,.js,.ts,.py,.json,.env,.txt,.md,*"
+        onChange={handleFileInput}
         className="hidden"
       />
 
@@ -337,13 +392,13 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         className="hidden"
       />
 
-      {/* Drag & Drop Visual Overlay for Folders and Files */}
+      {/* Drag & Drop Visual Overlay for Folders, Zips and Files */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/85 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/90 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
           <UploadCloud className="h-20 w-20 text-indigo-300 mb-3" />
-          <h3 className="text-xl font-bold text-white">Rilascia qui Cartelle o File</h3>
+          <h3 className="text-xl font-bold text-white">Rilascia qui File, Cartelle o Archivi ZIP / RAR</h3>
           <p className="text-xs text-indigo-200 mt-2 max-w-md">
-            L'intera gerarchia delle cartelle e dei file verrà caricata automaticamente e preservata sul tuo server Proxmox.
+            Gli archivi ZIP verranno estratti automaticamente preservando tutte le cartelle e i file sul tuo server Proxmox.
           </p>
         </div>
       )}
@@ -371,7 +426,7 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
             <button
               onClick={() => fileInputRef.current?.click()}
               className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-              title="Carica File dal PC"
+              title="Carica File o Archivi .ZIP / .RAR"
             >
               <Upload className="h-3.5 w-3.5 text-indigo-400" />
             </button>
@@ -438,19 +493,20 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         <div className="flex-1 overflow-y-auto p-2">
           {files.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-4 text-center text-zinc-500 mt-6">
-              <UploadCloud className="h-8 w-8 mb-2 opacity-40 text-indigo-400" />
-              <p className="text-xs font-medium text-zinc-400">Trascina Cartelle o File qui</p>
-              <p className="text-[10px] text-zinc-500 mt-1">Carica l'intero bot con 1 drag & drop</p>
+              <FileArchive className="h-8 w-8 mb-2 opacity-40 text-amber-400" />
+              <p className="text-xs font-medium text-zinc-300">Trascina .ZIP, .RAR o Cartelle</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Estratti e caricati automaticamente</p>
             </div>
           ) : (
             <ul className="space-y-0.5">
               {files.map((item) => {
                 const isSelected = selectedFile === item.path;
+                const isArchive = isArchiveFile(item.name);
                 return (
                   <li
                     key={item.path}
                     onClick={() => {
-                      if (!item.isDirectory) {
+                      if (!item.isDirectory && !isArchive) {
                         loadFileContent(item.path);
                       }
                     }}
@@ -465,13 +521,15 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
                       <span className="truncate">{item.name}</span>
                     </div>
 
-                    <button
-                      onClick={(e) => handleDelete(item.path, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
-                      title="Elimina"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleDelete(item.path, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
+                        title="Elimina"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -481,11 +539,11 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
 
         {/* Drag & Drop Quick Hint at bottom of sidebar */}
         <div
-          onClick={() => folderInputRef.current?.click()}
+          onClick={() => fileInputRef.current?.click()}
           className="border-t border-zinc-800/80 p-2.5 text-center text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-zinc-800/40 cursor-pointer transition-colors flex items-center justify-center gap-1.5"
         >
-          <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
-          Trascina intere Cartelle qui
+          <Archive className="h-3.5 w-3.5 text-amber-400" />
+          Supporta .ZIP, .RAR e Cartelle
         </div>
       </div>
 
@@ -539,13 +597,13 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         ) : (
           <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600 p-8">
             <div
-              onClick={() => folderInputRef.current?.click()}
-              className="cursor-pointer rounded-2xl border border-dashed border-zinc-800 hover:border-indigo-500/50 bg-zinc-900/30 hover:bg-indigo-950/20 p-8 transition-all max-w-sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="cursor-pointer rounded-2xl border border-dashed border-zinc-800 hover:border-amber-500/50 bg-zinc-900/30 hover:bg-amber-950/10 p-8 transition-all max-w-sm"
             >
-              <UploadCloud className="h-12 w-12 mb-3 mx-auto text-indigo-400/60" />
-              <p className="text-sm font-semibold text-zinc-300">Trascina Cartelle o File qui</p>
-              <p className="text-xs text-zinc-500 mt-1">
-                Supporta cartelle annidate (es. <code className="text-zinc-400">commands/</code>, <code className="text-zinc-400">src/</code>, <code className="text-zinc-400">events/</code>) mantenendo la struttura originale
+              <FileArchive className="h-12 w-12 mb-3 mx-auto text-amber-400/70" />
+              <p className="text-sm font-semibold text-zinc-200">Trascina qui File, Cartelle o file .ZIP / .RAR</p>
+              <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
+                Gli archivi compresi i file compressi (.zip) vengono estratti automaticamente creando subito tutti i file sul server.
               </p>
             </div>
           </div>

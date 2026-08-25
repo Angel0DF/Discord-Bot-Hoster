@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useRef } from "react";
 import { BOT_TEMPLATES, BotTemplate } from "@/lib/templates";
-import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen } from "lucide-react";
+import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen, FileArchive } from "lucide-react";
 import { ShimmerButton } from "./ui/shimmer-button";
 import { ApiClient } from "@/lib/api-client";
+import JSZip from "jszip";
 
 interface CreateBotModalProps {
   isOpen: boolean;
@@ -31,10 +32,30 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
 
   if (!isOpen) return null;
 
+  const extractZipFile = async (zipFile: globalThis.File): Promise<UploadedFileItem[]> => {
+    const list: UploadedFileItem[] = [];
+    const zip = new JSZip();
+    const loaded = await zip.loadAsync(zipFile);
+    for (const [filename, fileData] of Object.entries(loaded.files)) {
+      if (!fileData.dir) {
+        const content = await fileData.async("string");
+        list.push({ name: filename, content });
+      }
+    }
+    return list;
+  };
+
   const traverseEntry = async (entry: any, basePath: string = ""): Promise<UploadedFileItem[]> => {
     const list: UploadedFileItem[] = [];
     if (entry.isFile) {
       const file: File = await new Promise((res, rej) => entry.file(res, rej));
+      if (file.name.toLowerCase().endsWith(".zip")) {
+        try {
+          const unzipped = await extractZipFile(file);
+          list.push(...unzipped);
+          return list;
+        } catch {}
+      }
       const content = await file.text();
       const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
       list.push({ name: relativePath, content });
@@ -70,8 +91,13 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
       } else if (item.kind === "file") {
         const file = item.getAsFile();
         if (file) {
-          const text = await file.text();
-          list.push({ name: file.name, content: text });
+          if (file.name.toLowerCase().endsWith(".zip")) {
+            const unzipped = await extractZipFile(file);
+            list.push(...unzipped);
+          } else {
+            const text = await file.text();
+            list.push({ name: file.name, content: text });
+          }
         }
       }
     }
@@ -101,6 +127,29 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
     }
   };
 
+  const handleMultipleFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const list: UploadedFileItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (f.name.toLowerCase().endsWith(".zip")) {
+        try {
+          const unzipped = await extractZipFile(f);
+          list.push(...unzipped);
+          continue;
+        } catch {}
+      }
+      const text = await f.text();
+      list.push({ name: f.name, content: text });
+    }
+    if (list.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...list]);
+      if (!botName) {
+        setBotName(list[0].name.replace(/\.[^/.]+$/, "").split("/")[0]);
+      }
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!botName.trim()) {
@@ -121,7 +170,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
 
       const finalFiles = uploadedFiles.length > 0 ? uploadedFiles : selectedTemplate.files;
 
-      // Auto-detect mainFile if python vs js
+      // Auto-detect runtime and main entry point
       let mainFile = selectedTemplate.mainFile;
       let runtime = selectedTemplate.runtime;
       if (uploadedFiles.some((f) => f.name.endsWith(".py") || f.name.includes("main.py"))) {
@@ -167,17 +216,8 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
           type="file"
           ref={fileInputRef}
           multiple
-          onChange={async (e) => {
-            if (e.target.files) {
-              const list: UploadedFileItem[] = [];
-              for (let i = 0; i < e.target.files.length; i++) {
-                const f = e.target.files[i];
-                const text = await f.text();
-                list.push({ name: f.name, content: text });
-              }
-              setUploadedFiles((prev) => [...prev, ...list]);
-            }
-          }}
+          accept=".zip,.rar,.tar,.gz,.js,.ts,.py,.json,.env,.txt,*"
+          onChange={(e) => handleMultipleFiles(e.target.files)}
           className="hidden"
         />
         <input
@@ -207,7 +247,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
           <div>
             <h2 className="text-lg font-bold text-white">Crea o Ospita un Nuovo Bot</h2>
             <p className="text-xs text-zinc-400">
-              Scegli un template pronto o trascina l'intera cartella del tuo bot esistente.
+              Scegli un template pronto o trascina un archivio .ZIP / .RAR / Cartella.
             </p>
           </div>
         </div>
@@ -253,10 +293,10 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
             </div>
           </div>
 
-          {/* Drag and Drop Zone for Folders & Files */}
+          {/* Drag and Drop Zone for Folders, Zips & Files */}
           <div>
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center justify-between">
-              <span>Oppure Carica una Cartella Intera (Drag & Drop)</span>
+              <span>Oppure Carica un archivio .ZIP / .RAR o una Cartella</span>
               {uploadedFiles.length > 0 && (
                 <button
                   type="button"
@@ -274,21 +314,21 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              onClick={() => folderInputRef.current?.click()}
+              onClick={() => fileInputRef.current?.click()}
               className={`cursor-pointer rounded-xl border border-dashed p-5 text-center transition-all ${
                 isDragging
-                  ? "border-indigo-400 bg-indigo-950/40 scale-[1.01]"
+                  ? "border-amber-400 bg-amber-950/20 scale-[1.01]"
                   : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/60"
               }`}
             >
-              <FolderOpen className="h-7 w-7 mx-auto text-amber-400/90 mb-1.5" />
+              <FileArchive className="h-7 w-7 mx-auto text-amber-400/90 mb-1.5" />
               <p className="text-xs font-medium text-zinc-200">
                 {uploadedFiles.length > 0
-                  ? `✅ ${uploadedFiles.length} file e sottocartelle pronti per il bot`
-                  : "Trascina qui l'intera Cartella del tuo Bot (con comandi, config, env)"}
+                  ? `✅ ${uploadedFiles.length} file estratti pronti per il bot`
+                  : "Trascina qui il file .ZIP, .RAR o l'intera Cartella del tuo Bot"}
               </p>
               <p className="text-[10px] text-zinc-500 mt-0.5">
-                oppure clicca per selezionare una cartella dal computer
+                Verrà decompresso e importato istantaneamente
               </p>
             </div>
           </div>
