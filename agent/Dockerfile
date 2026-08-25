@@ -17,3 +17,4 @@ ENV AGENT_SECRET_KEY=proxmox_discord_secret_2026
 ENV NODE_ENV=production
 
 CMD ["node", "server.js"]
+

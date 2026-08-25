@@ -239,20 +239,16 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
         }
         active.stats = { cpu: 0, memory: 0, uptime: 0 };
 
-        // Handle auto restart
-        if (active.status !== 'stopping' && config.autoRestart) {
-          if (active.restartsCount < config.maxRestarts) {
-            active.restartsCount++;
-            const delay = config.restartDelay || 3000;
-            broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio #${active.restartsCount}/${config.maxRestarts} tra ${delay / 1000}s...`);
-            active.status = 'starting';
-            active.restartTimeout = setTimeout(() => {
-              startBot(botId);
-            }, delay);
-            return;
-          } else {
-            broadcastLog(botId, `❌ [Auto-Restart] Raggiunto il limite massimo di riavvii (${config.maxRestarts}). Bot fermato.`);
-          }
+        // Keep-Alive Watchdog: Always auto-restart if autoRestart is true
+        if (active.status !== 'stopping' && config.autoRestart !== false) {
+          active.restartsCount++;
+          const delay = Math.min(30000, (config.restartDelay || 3000) * Math.min(active.restartsCount, 10));
+          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio #${active.restartsCount} tra ${delay / 1000}s...`);
+          active.status = 'starting';
+          active.restartTimeout = setTimeout(() => {
+            startBot(botId);
+          }, delay);
+          return;
         }
 
         active.status = code === 0 ? 'offline' : 'error';
@@ -274,6 +270,9 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
             uptime: Math.floor((Date.now() - active.startTime) / 1000),
             pid: active.process.pid,
           };
+          if (active.stats.uptime > 60 && active.restartsCount > 0) {
+            active.restartsCount = 0;
+          }
         } catch {
           // Process might have just exited
         }

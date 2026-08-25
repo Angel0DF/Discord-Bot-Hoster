@@ -174,15 +174,15 @@ function startBotProcess(botId) {
         if (active.statsInterval) clearInterval(active.statsInterval);
         active.stats = { cpu: 0, memory: 0, uptime: 0 };
 
-        if (active.status !== 'stopping' && config.autoRestart) {
-          if (active.restartsCount < (config.maxRestarts || 5)) {
-            active.restartsCount++;
-            const delay = config.restartDelay || 3000;
-            broadcastLog(botId, `🔄 [Auto-Restart] Riavvio #${active.restartsCount}/${config.maxRestarts || 5} tra ${delay / 1000}s...`);
-            active.status = 'starting';
-            active.restartTimeout = setTimeout(() => startBotProcess(botId), delay);
-            return;
-          }
+        // Keep-Alive Watchdog: Always restart if autoRestart is true
+        if (active.status !== 'stopping' && config.autoRestart !== false) {
+          active.restartsCount++;
+          // Progressive delay: 3s initially, max 30s if continuous crashes
+          const delay = Math.min(30000, (config.restartDelay || 3000) * Math.min(active.restartsCount, 10));
+          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio #${active.restartsCount} tra ${delay / 1000}s...`);
+          active.status = 'starting';
+          active.restartTimeout = setTimeout(() => startBotProcess(botId), delay);
+          return;
         }
         active.status = code === 0 ? 'offline' : 'error';
       }
@@ -199,9 +199,21 @@ function startBotProcess(botId) {
             uptime: Math.floor((Date.now() - active.startTime) / 1000),
             pid: active.process.pid,
           };
+          // Reset restart counter after running smoothly for 1 minute
+          if (active.stats.uptime > 60 && active.restartsCount > 0) {
+            active.restartsCount = 0;
+          }
         } catch {}
       }
     }, 2000);
+
+    // Persist enabled state in bots.json
+    const allBots = getBots();
+    const bIndex = allBots.findIndex((b) => b.id === botId);
+    if (bIndex !== -1) {
+      allBots[bIndex].enabled = true;
+      saveBots(allBots);
+    }
 
     return { success: true, message: 'Bot avviato' };
   } catch (err) {
@@ -213,12 +225,27 @@ function startBotProcess(botId) {
 function stopBotProcess(botId) {
   const active = activeProcesses.get(botId);
   if (!active || !active.process || active.status === 'offline') {
+    // Mark disabled
+    const allBots = getBots();
+    const bIndex = allBots.findIndex((b) => b.id === botId);
+    if (bIndex !== -1) {
+      allBots[bIndex].enabled = false;
+      saveBots(allBots);
+    }
     return { success: true, message: 'Bot già offline' };
   }
 
   active.status = 'stopping';
   if (active.restartTimeout) clearTimeout(active.restartTimeout);
   if (active.statsInterval) clearInterval(active.statsInterval);
+
+  // Persist disabled state so it won't auto-start on reboot when explicitly stopped by user
+  const allBots = getBots();
+  const bIndex = allBots.findIndex((b) => b.id === botId);
+  if (bIndex !== -1) {
+    allBots[bIndex].enabled = false;
+    saveBots(allBots);
+  }
 
   broadcastLog(botId, `🛑 [Proxmox Agent] Arresto in corso...`);
   const pid = active.process.pid;
@@ -484,5 +511,17 @@ app.post('/api/bots/:id/files', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [Proxmox Bot Hoster Agent] In ascolto sulla porta ${PORT}`);
   console.log(`🔑 Secret Key configurata: ${SECRET_KEY ? 'Presente' : 'Disabilitata'}`);
+
+  // Auto-Boot: Automatically restore and start all active bots on server startup/reboot
+  setTimeout(() => {
+    const bots = getBots();
+    console.log(`🔄 [Auto-Boot] Controllo bot da avviare automaticamente all'avvio (${bots.length} configurati)...`);
+    bots.forEach((bot) => {
+      if (bot.enabled !== false && bot.autoRestart !== false) {
+        console.log(`🟢 [Auto-Boot] Avvio automatico bot: ${bot.name} (ID: ${bot.id})`);
+        startBotProcess(bot.id);
+      }
+    });
+  }, 1500);
 });
 
