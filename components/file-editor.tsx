@@ -18,12 +18,18 @@ import {
   Lock,
   UploadCloud,
   Upload,
+  FolderOpen,
 } from "lucide-react";
 
 import { ApiClient } from "@/lib/api-client";
 
 interface FileEditorProps {
   botId: string;
+}
+
+interface UploadQueueItem {
+  relativePath: string;
+  file: globalThis.File;
 }
 
 export const FileEditor = ({ botId }: FileEditorProps) => {
@@ -41,6 +47,7 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = async (subPath: string = "") => {
     setIsLoading(true);
@@ -158,7 +165,75 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     }
   };
 
-  // Drag and Drop & File Upload handlers
+  // Helper for recursive directory traversal in drag and drop
+  const traverseFileSystemEntry = async (
+    entry: any,
+    basePath: string = ""
+  ): Promise<UploadQueueItem[]> => {
+    const results: UploadQueueItem[] = [];
+
+    if (entry.isFile) {
+      const file: globalThis.File = await new Promise((resolve, reject) => {
+        entry.file(resolve, reject);
+      });
+      const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+      results.push({ relativePath, file });
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      const readAllEntries = async (): Promise<any[]> => {
+        let entries: any[] = [];
+        let read = await new Promise<any[]>((resolve, reject) => {
+          dirReader.readEntries(resolve, reject);
+        });
+        while (read.length > 0) {
+          entries = entries.concat(read);
+          read = await new Promise<any[]>((resolve, reject) => {
+            dirReader.readEntries(resolve, reject);
+          });
+        }
+        return entries;
+      };
+
+      const childEntries = await readAllEntries();
+      const nextBasePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+
+      for (const child of childEntries) {
+        const subResults = await traverseFileSystemEntry(child, nextBasePath);
+        results.push(...subResults);
+      }
+    }
+
+    return results;
+  };
+
+  const uploadQueue = async (items: UploadQueueItem[]) => {
+    setIsDragging(false);
+    setUploadStatus(`Caricamento di ${items.length} file e sottocartelle in corso...`);
+
+    let count = 0;
+    for (const item of items) {
+      try {
+        const content = await item.file.text();
+        const fullTarget = currentPath
+          ? `${currentPath}/${item.relativePath}`
+          : item.relativePath;
+
+        await ApiClient.saveFile(botId, {
+          path: fullTarget,
+          content,
+        });
+        count++;
+        setUploadStatus(`Caricati ${count}/${items.length} file...`);
+      } catch (err) {
+        console.error("Error uploading file:", item.relativePath, err);
+      }
+    }
+
+    setUploadStatus(`✅ ${count} file caricati mantenendo la struttura delle cartelle!`);
+    setTimeout(() => setUploadStatus(null), 3500);
+    await fetchFiles(currentPath);
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -171,45 +246,46 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     setIsDragging(false);
   };
 
-  const processUploadedFiles = async (fileList: FileList | File[]) => {
-    setIsDragging(false);
-    setUploadStatus(`Caricamento di ${fileList.length} file in corso...`);
-
-    let uploadedCount = 0;
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      try {
-        const text = await file.text();
-        const targetPath = currentPath ? `${currentPath}/${file.name}` : file.name;
-
-        await ApiClient.saveFile(botId, {
-          path: targetPath,
-          content: text,
-        });
-        uploadedCount++;
-      } catch (err) {
-        console.error("Failed to upload file:", file.name, err);
-      }
-    }
-
-    setUploadStatus(`✅ ${uploadedCount} file caricati con successo!`);
-    setTimeout(() => setUploadStatus(null), 3000);
-    await fetchFiles(currentPath);
-  };
-
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      await processUploadedFiles(e.dataTransfer.files);
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    const queue: UploadQueueItem[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          const files = await traverseFileSystemEntry(entry);
+          queue.push(...files);
+        }
+      } else if (item.kind === "file") {
+        const f = item.getAsFile();
+        if (f) queue.push({ relativePath: f.name, file: f });
+      }
+    }
+
+    if (queue.length > 0) {
+      await uploadQueue(queue);
     }
   };
 
-  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      await processUploadedFiles(e.target.files);
+  const handleFolderInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const queue: UploadQueueItem[] = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      const file = e.target.files[i];
+      // webkitRelativePath contains the full relative path inside the folder
+      const relativePath = (file as any).webkitRelativePath || file.name;
+      queue.push({ relativePath, file });
+    }
+    if (queue.length > 0) {
+      await uploadQueue(queue);
     }
   };
 
@@ -237,24 +313,44 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         type="file"
         ref={fileInputRef}
         multiple
-        onChange={handleFileInputChange}
+        onChange={(e) => {
+          if (e.target.files) {
+            const queue = Array.from(e.target.files).map((file) => ({
+              relativePath: file.name,
+              file,
+            }));
+            uploadQueue(queue);
+          }
+        }}
         className="hidden"
       />
 
-      {/* Drag & Drop Visual Overlay */}
+      {/* Hidden folder input with webkitdirectory */}
+      <input
+        type="file"
+        ref={folderInputRef}
+        // @ts-ignore
+        webkitdirectory="true"
+        directory="true"
+        multiple
+        onChange={handleFolderInput}
+        className="hidden"
+      />
+
+      {/* Drag & Drop Visual Overlay for Folders and Files */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/80 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
-          <UploadCloud className="h-16 w-16 text-indigo-300 mb-3" />
-          <h3 className="text-lg font-bold text-white">Rilascia qui i file del tuo bot</h3>
-          <p className="text-xs text-indigo-200 mt-1">
-            Verranno caricati istantaneamente nella cartella del bot sul tuo server Proxmox.
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/85 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
+          <UploadCloud className="h-20 w-20 text-indigo-300 mb-3" />
+          <h3 className="text-xl font-bold text-white">Rilascia qui Cartelle o File</h3>
+          <p className="text-xs text-indigo-200 mt-2 max-w-md">
+            L'intera gerarchia delle cartelle e dei file verrà caricata automaticamente e preservata sul tuo server Proxmox.
           </p>
         </div>
       )}
 
       {/* Upload Notification Banner */}
       {uploadStatus && (
-        <div className="absolute top-3 right-4 z-40 rounded-xl border border-indigo-500/40 bg-zinc-900/90 px-4 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur-md flex items-center gap-2">
+        <div className="absolute top-3 right-4 z-40 rounded-xl border border-indigo-500/40 bg-zinc-900/95 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md flex items-center gap-2">
           <span>{uploadStatus}</span>
         </div>
       )}
@@ -266,9 +362,16 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
           <span className="text-xs font-semibold text-zinc-300">File del Progetto</span>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => folderInputRef.current?.click()}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              title="Carica un'intera Cartella con tutti i file"
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+            </button>
+            <button
               onClick={() => fileInputRef.current?.click()}
               className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-              title="Carica File dal PC (o trascinali qui)"
+              title="Carica File dal PC"
             >
               <Upload className="h-3.5 w-3.5 text-indigo-400" />
             </button>
@@ -336,8 +439,8 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
           {files.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-4 text-center text-zinc-500 mt-6">
               <UploadCloud className="h-8 w-8 mb-2 opacity-40 text-indigo-400" />
-              <p className="text-xs font-medium text-zinc-400">Trascina i file qui</p>
-              <p className="text-[10px] text-zinc-500 mt-1">oppure clicca l'icona di upload</p>
+              <p className="text-xs font-medium text-zinc-400">Trascina Cartelle o File qui</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Carica l'intero bot con 1 drag & drop</p>
             </div>
           ) : (
             <ul className="space-y-0.5">
@@ -378,10 +481,11 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
 
         {/* Drag & Drop Quick Hint at bottom of sidebar */}
         <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-t border-zinc-800/80 p-2.5 text-center text-[10px] text-zinc-500 hover:text-indigo-300 hover:bg-zinc-800/40 cursor-pointer transition-colors"
+          onClick={() => folderInputRef.current?.click()}
+          className="border-t border-zinc-800/80 p-2.5 text-center text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-zinc-800/40 cursor-pointer transition-colors flex items-center justify-center gap-1.5"
         >
-          📁 Trascina qui i file dal tuo PC
+          <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+          Trascina intere Cartelle qui
         </div>
       </div>
 
@@ -435,13 +539,13 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         ) : (
           <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600 p-8">
             <div
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => folderInputRef.current?.click()}
               className="cursor-pointer rounded-2xl border border-dashed border-zinc-800 hover:border-indigo-500/50 bg-zinc-900/30 hover:bg-indigo-950/20 p-8 transition-all max-w-sm"
             >
               <UploadCloud className="h-12 w-12 mb-3 mx-auto text-indigo-400/60" />
-              <p className="text-sm font-semibold text-zinc-300">Trascina e Rilascia i file qui</p>
+              <p className="text-sm font-semibold text-zinc-300">Trascina Cartelle o File qui</p>
               <p className="text-xs text-zinc-500 mt-1">
-                Oppure clicca per selezionare i file del tuo bot dal computer
+                Supporta cartelle annidate (es. <code className="text-zinc-400">commands/</code>, <code className="text-zinc-400">src/</code>, <code className="text-zinc-400">events/</code>) mantenendo la struttura originale
               </p>
             </div>
           </div>

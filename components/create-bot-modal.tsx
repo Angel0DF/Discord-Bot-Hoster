@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef } from "react";
 import { BOT_TEMPLATES, BotTemplate } from "@/lib/templates";
-import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload } from "lucide-react";
+import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen } from "lucide-react";
 import { ShimmerButton } from "./ui/shimmer-button";
 import { ApiClient } from "@/lib/api-client";
 
@@ -11,45 +11,93 @@ interface CreateBotModalProps {
   onBotCreated: (newBot: any) => void;
 }
 
+interface UploadedFileItem {
+  name: string;
+  content: string;
+}
+
 export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModalProps) => {
   const [selectedTemplate, setSelectedTemplate] = useState<BotTemplate>(BOT_TEMPLATES[0]);
   const [botName, setBotName] = useState("");
   const [botDescription, setBotDescription] = useState("");
   const [discordToken, setDiscordToken] = useState("");
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; content: string }>>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleFilesChosen = async (files: FileList | File[]) => {
-    const list: Array<{ name: string; content: string }> = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      try {
-        const text = await f.text();
-        list.push({ name: f.name, content: text });
-
-        // Auto-detect runtime and bot name if empty
-        if (!botName) {
-          setBotName(f.name.replace(/\.[^/.]+$/, ""));
-        }
-      } catch (err) {
-        console.error(err);
+  const traverseEntry = async (entry: any, basePath: string = ""): Promise<UploadedFileItem[]> => {
+    const list: UploadedFileItem[] = [];
+    if (entry.isFile) {
+      const file: File = await new Promise((res, rej) => entry.file(res, rej));
+      const content = await file.text();
+      const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+      list.push({ name: relativePath, content });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const childEntries = await new Promise<any[]>((res, rej) => reader.readEntries(res, rej));
+      const nextPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+      for (const child of childEntries) {
+        const sub = await traverseEntry(child, nextPath);
+        list.push(...sub);
       }
     }
-    setUploadedFiles((prev) => [...prev, ...list]);
+    return list;
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      await handleFilesChosen(e.dataTransfer.files);
+
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    const list: UploadedFileItem[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          const files = await traverseEntry(entry);
+          list.push(...files);
+        }
+      } else if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) {
+          const text = await file.text();
+          list.push({ name: file.name, content: text });
+        }
+      }
+    }
+
+    if (list.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...list]);
+      if (!botName) {
+        setBotName(list[0].name.replace(/\.[^/.]+$/, "").split("/")[0]);
+      }
+    }
+  };
+
+  const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const list: UploadedFileItem[] = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      const file = e.target.files[i];
+      const name = (file as any).webkitRelativePath || file.name;
+      const content = await file.text();
+      list.push({ name, content });
+    }
+    if (list.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...list]);
+      if (!botName) {
+        setBotName(list[0].name.split("/")[0]);
+      }
     }
   };
 
@@ -71,16 +119,26 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
         env.DISCORD_BOT_TOKEN = discordToken.trim();
       }
 
-      // If user uploaded custom files, use them instead of template files
       const finalFiles = uploadedFiles.length > 0 ? uploadedFiles : selectedTemplate.files;
+
+      // Auto-detect mainFile if python vs js
+      let mainFile = selectedTemplate.mainFile;
+      let runtime = selectedTemplate.runtime;
+      if (uploadedFiles.some((f) => f.name.endsWith(".py") || f.name.includes("main.py"))) {
+        runtime = "python";
+        mainFile = uploadedFiles.find((f) => f.name.endsWith("main.py") || f.name.endsWith("bot.py"))?.name || "main.py";
+      } else if (uploadedFiles.some((f) => f.name.endsWith(".js") || f.name.endsWith(".ts"))) {
+        runtime = "node";
+        mainFile = uploadedFiles.find((f) => f.name.endsWith("index.js") || f.name.endsWith("bot.js") || f.name.endsWith("main.js"))?.name || "index.js";
+      }
 
       const data = await ApiClient.createBot({
         name: botName.trim(),
         description: botDescription.trim() || selectedTemplate.description,
         templateId: selectedTemplate.id,
         templateFiles: finalFiles,
-        runtime: selectedTemplate.runtime,
-        mainFile: selectedTemplate.mainFile,
+        runtime,
+        mainFile,
         env,
       });
 
@@ -104,12 +162,31 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
       <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
-        {/* Hidden file input */}
+        {/* Hidden inputs */}
         <input
           type="file"
           ref={fileInputRef}
           multiple
-          onChange={(e) => e.target.files && handleFilesChosen(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files) {
+              const list: UploadedFileItem[] = [];
+              Array.from(e.target.files).forEach(async (f) => {
+                const text = await f.text();
+                list.push({ name: f.name, content: text });
+              });
+              setUploadedFiles((prev) => [...prev, ...list]);
+            }
+          }}
+          className="hidden"
+        />
+        <input
+          type="file"
+          ref={folderInputRef}
+          // @ts-ignore
+          webkitdirectory="true"
+          directory="true"
+          multiple
+          onChange={handleFolderUpload}
           className="hidden"
         />
 
@@ -129,7 +206,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
           <div>
             <h2 className="text-lg font-bold text-white">Crea o Ospita un Nuovo Bot</h2>
             <p className="text-xs text-zinc-400">
-              Scegli un template pronto o trascina i file del tuo bot esistente.
+              Scegli un template pronto o trascina l'intera cartella del tuo bot esistente.
             </p>
           </div>
         </div>
@@ -175,10 +252,19 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
             </div>
           </div>
 
-          {/* Drag and Drop Zone */}
+          {/* Drag and Drop Zone for Folders & Files */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-              Oppure Carica File Esistenti (Drag & Drop)
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center justify-between">
+              <span>Oppure Carica una Cartella Intera (Drag & Drop)</span>
+              {uploadedFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setUploadedFiles([])}
+                  className="text-[10px] text-rose-400 hover:underline"
+                >
+                  Rimuovi file caricati ({uploadedFiles.length})
+                </button>
+              )}
             </label>
             <div
               onDragOver={(e) => {
@@ -187,20 +273,22 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`cursor-pointer rounded-xl border border-dashed p-4 text-center transition-all ${
+              onClick={() => folderInputRef.current?.click()}
+              className={`cursor-pointer rounded-xl border border-dashed p-5 text-center transition-all ${
                 isDragging
-                  ? "border-indigo-400 bg-indigo-950/40"
+                  ? "border-indigo-400 bg-indigo-950/40 scale-[1.01]"
                   : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/60"
               }`}
             >
-              <UploadCloud className="h-6 w-6 mx-auto text-indigo-400/80 mb-1.5" />
-              <p className="text-xs font-medium text-zinc-300">
+              <FolderOpen className="h-7 w-7 mx-auto text-amber-400/90 mb-1.5" />
+              <p className="text-xs font-medium text-zinc-200">
                 {uploadedFiles.length > 0
-                  ? `✅ ${uploadedFiles.length} file pronti per il caricamento`
-                  : "Trascina qui i file del tuo bot (.js, .py, .env, .json)"}
+                  ? `✅ ${uploadedFiles.length} file e sottocartelle pronti per il bot`
+                  : "Trascina qui l'intera Cartella del tuo Bot (con comandi, config, env)"}
               </p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">o clicca per selezionarli dal PC</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">
+                oppure clicca per selezionare una cartella dal computer
+              </p>
             </div>
           </div>
 
