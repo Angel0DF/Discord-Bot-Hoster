@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FileItem } from "@/lib/types";
 import {
   Folder,
@@ -16,6 +16,8 @@ import {
   FolderPlus,
   FilePlus,
   Lock,
+  UploadCloud,
+  Upload,
 } from "lucide-react";
 
 import { ApiClient } from "@/lib/api-client";
@@ -35,6 +37,10 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [showCreateModal, setShowCreateModal] = useState<"file" | "folder" | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = async (subPath: string = "") => {
     setIsLoading(true);
@@ -152,6 +158,61 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
     }
   };
 
+  // Drag and Drop & File Upload handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const processUploadedFiles = async (fileList: FileList | File[]) => {
+    setIsDragging(false);
+    setUploadStatus(`Caricamento di ${fileList.length} file in corso...`);
+
+    let uploadedCount = 0;
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      try {
+        const text = await file.text();
+        const targetPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+
+        await ApiClient.saveFile(botId, {
+          path: targetPath,
+          content: text,
+        });
+        uploadedCount++;
+      } catch (err) {
+        console.error("Failed to upload file:", file.name, err);
+      }
+    }
+
+    setUploadStatus(`✅ ${uploadedCount} file caricati con successo!`);
+    setTimeout(() => setUploadStatus(null), 3000);
+    await fetchFiles(currentPath);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processUploadedFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processUploadedFiles(e.target.files);
+    }
+  };
+
   const getFileIcon = (name: string, isDirectory: boolean) => {
     if (isDirectory) return <Folder className="h-4 w-4 text-indigo-400" />;
     if (name.endsWith(".js") || name.endsWith(".ts")) return <FileCode className="h-4 w-4 text-amber-400" />;
@@ -165,13 +226,52 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
   const lineCount = fileContent.split("\n").length;
 
   return (
-    <div className="flex h-[560px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="relative flex h-[580px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl transition-all"
+    >
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        multiple
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
+      {/* Drag & Drop Visual Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/80 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
+          <UploadCloud className="h-16 w-16 text-indigo-300 mb-3" />
+          <h3 className="text-lg font-bold text-white">Rilascia qui i file del tuo bot</h3>
+          <p className="text-xs text-indigo-200 mt-1">
+            Verranno caricati istantaneamente nella cartella del bot sul tuo server Proxmox.
+          </p>
+        </div>
+      )}
+
+      {/* Upload Notification Banner */}
+      {uploadStatus && (
+        <div className="absolute top-3 right-4 z-40 rounded-xl border border-indigo-500/40 bg-zinc-900/90 px-4 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur-md flex items-center gap-2">
+          <span>{uploadStatus}</span>
+        </div>
+      )}
+
       {/* File Tree Sidebar */}
       <div className="flex w-64 flex-col border-r border-zinc-800/80 bg-zinc-900/50">
         {/* Sidebar Header */}
         <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-2.5">
           <span className="text-xs font-semibold text-zinc-300">File del Progetto</span>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              title="Carica File dal PC (o trascinali qui)"
+            >
+              <Upload className="h-3.5 w-3.5 text-indigo-400" />
+            </button>
             <button
               onClick={() => setShowCreateModal("file")}
               className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
@@ -234,7 +334,11 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
         {/* File List */}
         <div className="flex-1 overflow-y-auto p-2">
           {files.length === 0 ? (
-            <p className="text-center text-xs text-zinc-500 mt-6">Cartella vuota</p>
+            <div className="flex flex-col items-center justify-center p-4 text-center text-zinc-500 mt-6">
+              <UploadCloud className="h-8 w-8 mb-2 opacity-40 text-indigo-400" />
+              <p className="text-xs font-medium text-zinc-400">Trascina i file qui</p>
+              <p className="text-[10px] text-zinc-500 mt-1">oppure clicca l'icona di upload</p>
+            </div>
           ) : (
             <ul className="space-y-0.5">
               {files.map((item) => {
@@ -270,6 +374,14 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
               })}
             </ul>
           )}
+        </div>
+
+        {/* Drag & Drop Quick Hint at bottom of sidebar */}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-t border-zinc-800/80 p-2.5 text-center text-[10px] text-zinc-500 hover:text-indigo-300 hover:bg-zinc-800/40 cursor-pointer transition-colors"
+        >
+          📁 Trascina qui i file dal tuo PC
         </div>
       </div>
 
@@ -321,14 +433,20 @@ export const FileEditor = ({ botId }: FileEditorProps) => {
             </div>
           </>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600">
-            <FileCode className="h-12 w-12 mb-3 opacity-30" />
-            <p className="text-sm font-medium text-zinc-400">Nessun file aperto</p>
-            <p className="text-xs text-zinc-500 mt-1">Seleziona un file dalla barra laterale per visualizzarlo o modificarlo</p>
+          <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600 p-8">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="cursor-pointer rounded-2xl border border-dashed border-zinc-800 hover:border-indigo-500/50 bg-zinc-900/30 hover:bg-indigo-950/20 p-8 transition-all max-w-sm"
+            >
+              <UploadCloud className="h-12 w-12 mb-3 mx-auto text-indigo-400/60" />
+              <p className="text-sm font-semibold text-zinc-300">Trascina e Rilascia i file qui</p>
+              <p className="text-xs text-zinc-500 mt-1">
+                Oppure clicca per selezionare i file del tuo bot dal computer
+              </p>
+            </div>
           </div>
         )}
       </div>
     </div>
   );
 };
-
