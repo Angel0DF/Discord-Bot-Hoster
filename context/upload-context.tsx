@@ -50,39 +50,66 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
     setTasks((prev) => [...prev, task]);
 
     try {
-      // 1. Read archive as Base64
-      const arrayBuffer = await archiveFile.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Content = btoa(binary);
+      // 1. Read archive as Base64 safely with FileReader
+      const base64Content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result as string;
+          const base64 = res.includes(",") ? res.split(",")[1] : res;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(archiveFile);
+      });
 
       const remoteFileName = archiveFile.name;
       const remoteFilePath = targetPath ? `${targetPath}/${remoteFileName}` : remoteFileName;
 
       // 2. Upload archive file to server
-      await ApiClient.saveFile(botId, {
+      const uploadRes = await ApiClient.saveFile(botId, {
         path: remoteFilePath,
         content: base64Content,
         isBinary: true,
         encoding: "base64",
       });
 
+      if (!uploadRes.success) {
+        throw new Error(uploadRes.error || "Errore nel caricamento del file compresso sul server");
+      }
+
       // 3. Trigger Server-side Unzip
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: "extracting", currentFileName: `Estrazione di ${archiveFile.name}...` } : t))
+        prev.map((t) => (t.id === taskId ? { ...t, status: "extracting", currentFileName: `Decompressione di ${archiveFile.name} in corso...` } : t))
       );
 
       const unzipRes = await ApiClient.saveFile(botId, {
         path: remoteFilePath,
         action: "unzip",
-        deleteAfter: true,
+        deleteAfter: false,
       });
 
       if (!unzipRes.success) {
-        throw new Error(unzipRes.error || "Errore durante l'estrazione dell'archivio sul server");
+        // Fallback for zip files: extract client-side with JSZip if server-side unzip failed
+        if (archiveFile.name.toLowerCase().endsWith(".zip")) {
+          const zip = await JSZip.loadAsync(archiveFile);
+          const zipEntries = Object.keys(zip.files);
+          let extractedCount = 0;
+
+          for (const filename of zipEntries) {
+            const fileData = zip.files[filename];
+            if (!fileData.dir) {
+              const textContent = await fileData.async("string");
+              const fullFilePath = targetPath ? `${targetPath}/${filename}` : filename;
+              await ApiClient.saveFile(botId, {
+                path: fullFilePath,
+                content: textContent,
+              });
+              extractedCount++;
+            }
+          }
+        } else {
+          throw new Error(unzipRes.error || "Errore durante l'estrazione dell'archivio sul server");
+        }
       }
 
       setTasks((prev) =>
