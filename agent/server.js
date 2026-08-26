@@ -216,17 +216,18 @@ function startBotProcess(botId) {
         if (active.statsInterval) clearInterval(active.statsInterval);
         active.stats = { cpu: 0, memory: 0, uptime: 0 };
 
-        // Keep-Alive Watchdog: Always restart if autoRestart is true
-        if (active.status !== 'stopping' && config.autoRestart !== false) {
+        // Keep-Alive Watchdog: Only auto-restart if crashed unexpectedly and not intentionally stopped/restarted
+        if (active.status !== 'stopped_by_user' && active.status !== 'restarting' && config.autoRestart !== false) {
           active.restartsCount++;
-          // Progressive delay: 3s initially, max 30s if continuous crashes
-          const delay = Math.min(30000, (config.restartDelay || 3000) * Math.min(active.restartsCount, 10));
-          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio #${active.restartsCount} tra ${delay / 1000}s...`);
+          const delay = Math.min(10000, (config.restartDelay || 2000));
+          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio tra ${delay / 1000}s...`);
           active.status = 'starting';
           active.restartTimeout = setTimeout(() => startBotProcess(botId), delay);
           return;
         }
-        active.status = code === 0 ? 'offline' : 'error';
+        if (active.status !== 'restarting') {
+          active.status = code === 0 ? 'offline' : 'error';
+        }
       }
     });
 
@@ -241,7 +242,6 @@ function startBotProcess(botId) {
             uptime: Math.floor((Date.now() - active.startTime) / 1000),
             pid: active.process.pid,
           };
-          // Reset restart counter after running smoothly for 1 minute
           if (active.stats.uptime > 60 && active.restartsCount > 0) {
             active.restartsCount = 0;
           }
@@ -267,7 +267,6 @@ function startBotProcess(botId) {
 function stopBotProcess(botId) {
   const active = activeProcesses.get(botId);
   if (!active || !active.process || active.status === 'offline') {
-    // Mark disabled
     const allBots = getBots();
     const bIndex = allBots.findIndex((b) => b.id === botId);
     if (bIndex !== -1) {
@@ -277,11 +276,10 @@ function stopBotProcess(botId) {
     return { success: true, message: 'Bot già offline' };
   }
 
-  active.status = 'stopping';
+  active.status = 'stopped_by_user';
   if (active.restartTimeout) clearTimeout(active.restartTimeout);
   if (active.statsInterval) clearInterval(active.statsInterval);
 
-  // Persist disabled state so it won't auto-start on reboot when explicitly stopped by user
   const allBots = getBots();
   const bIndex = allBots.findIndex((b) => b.id === botId);
   if (bIndex !== -1) {
@@ -296,18 +294,42 @@ function stopBotProcess(botId) {
     if (process.platform === 'win32') {
       exec(`taskkill /pid ${pid} /T /F`, () => {});
     } else {
-      active.process.kill('SIGTERM');
-      setTimeout(() => {
-        if (active && active.status === 'stopping' && active.process) {
-          active.process.kill('SIGKILL');
-        }
-      }, 3000);
+      try {
+        active.process.kill('SIGKILL');
+      } catch {
+        active.process.kill('SIGTERM');
+      }
     }
   }
 
   active.status = 'offline';
   active.stats = { cpu: 0, memory: 0, uptime: 0 };
   return { success: true, message: 'Bot arrestato' };
+}
+
+function restartBotProcess(botId) {
+  const active = activeProcesses.get(botId);
+  if (active) {
+    active.status = 'restarting';
+    if (active.restartTimeout) clearTimeout(active.restartTimeout);
+    if (active.statsInterval) clearInterval(active.statsInterval);
+    if (active.process && active.process.pid) {
+      try {
+        if (process.platform === 'win32') {
+          exec(`taskkill /pid ${active.process.pid} /T /F`, () => {});
+        } else {
+          active.process.kill('SIGKILL');
+        }
+      } catch {}
+    }
+  }
+
+  broadcastLog(botId, `🔄 [Proxmox Agent] Riavvio immediato del bot...`);
+  setTimeout(() => {
+    startBotProcess(botId);
+  }, 400);
+
+  return { success: true, message: 'Riavvio in corso' };
 }
 
 // System stats calculation
@@ -464,11 +486,7 @@ app.post('/api/bots/:id/power', (req, res) => {
   const { action } = req.body;
   if (action === 'start') return res.json(startBotProcess(id));
   if (action === 'stop') return res.json(stopBotProcess(id));
-  if (action === 'restart') {
-    stopBotProcess(id);
-    setTimeout(() => res.json(startBotProcess(id)), 1000);
-    return;
-  }
+  if (action === 'restart') return res.json(restartBotProcess(id));
   res.status(400).json({ success: false, error: 'Azione non valida' });
 });
 
