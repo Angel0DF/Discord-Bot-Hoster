@@ -10,9 +10,7 @@ import {
   Check,
   Upload,
   RefreshCw,
-  FileCode,
   Download,
-  Sparkles,
   CheckCircle2,
   FileText,
 } from "lucide-react";

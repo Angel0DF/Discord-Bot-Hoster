@@ -1,9 +1,8 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { BotState } from "@/lib/types";
-import { Terminal, Send, Trash2, Download, Play, Square, RotateCw, ArrowDown, Wifi, WifiOff } from "lucide-react";
+import { Terminal, Send, Trash2, Download, Play, Square, RotateCw } from "lucide-react";
 import { StatusBadge } from "./ui/status-badge";
-import { formatBytes, formatUptime } from "@/lib/utils";
 
 import { ApiClient } from "@/lib/api-client";
 
