@@ -23,6 +23,7 @@ export interface BotConfig {
   startCommand?: string; // custom command override if any
   installCommand?: string; // e.g. "npm install" or "pip install -r requirements.txt"
   env: Record<string, string>;
+  enabled?: boolean;
   autoRestart: boolean;
   maxRestarts: number;
   restartDelay: number; // ms

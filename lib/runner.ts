@@ -13,6 +13,7 @@ interface ActiveProcess {
   logs: string[];
   startTime: number;
   restartsCount: number;
+  manuallyStopped?: boolean;
   stats: {
     cpu: number;
     memory: number;
@@ -192,6 +193,7 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
         logs: [],
         startTime: Date.now(),
         restartsCount: 0,
+        manuallyStopped: false,
         stats: { cpu: 0, memory: 0, uptime: 0, pid: child.pid },
       };
       activeBots.set(botId, active);
@@ -201,6 +203,8 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
       active.status = 'starting';
       active.startTime = Date.now();
       active.stats.pid = child.pid;
+      active.manuallyStopped = false;
+      active.restartsCount = 0;
     }
 
     child.stdout?.on('data', (data) => {
@@ -239,11 +243,17 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
         }
         active.stats = { cpu: 0, memory: 0, uptime: 0 };
 
-        // Keep-Alive Watchdog: Always auto-restart if autoRestart is true
-        if (active.status !== 'stopping' && config.autoRestart !== false) {
+        // Keep-Alive Watchdog: NEVER auto-restart if manually stopped by user
+        if (active.manuallyStopped || !config.enabled || active.status === 'stopping' || active.status === 'offline') {
+          active.status = 'offline';
+          return;
+        }
+
+        // Only auto-restart on unexpected crashes
+        if (config.autoRestart !== false) {
           active.restartsCount++;
-          const delay = Math.min(30000, (config.restartDelay || 3000) * Math.min(active.restartsCount, 10));
-          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio #${active.restartsCount} tra ${delay / 1000}s...`);
+          const delay = Math.min(15000, (config.restartDelay || 2000));
+          broadcastLog(botId, `🔄 [Auto-Restart] Crash imprevisto. Tentativo di riavvio in ${delay / 1000}s...`);
           active.status = 'starting';
           active.restartTimeout = setTimeout(() => {
             startBot(botId);
@@ -308,7 +318,8 @@ export async function stopBot(botId: string): Promise<{ success: boolean; messag
     return { success: true, message: 'Il bot è già offline' };
   }
 
-  active.status = 'stopping';
+  active.manuallyStopped = true;
+  active.status = 'offline';
   if (active.restartTimeout) {
     clearTimeout(active.restartTimeout);
     active.restartTimeout = undefined;
@@ -318,7 +329,7 @@ export async function stopBot(botId: string): Promise<{ success: boolean; messag
     active.statsInterval = undefined;
   }
 
-  broadcastLog(botId, `🛑 [Host Manager] Arresto del bot in corso...`);
+  broadcastLog(botId, `🛑 [Host Manager] Arresto manuale del bot...`);
 
   const pid = active.process.pid;
 
@@ -326,23 +337,43 @@ export async function stopBot(botId: string): Promise<{ success: boolean; messag
     if (process.platform === 'win32') {
       exec(`taskkill /pid ${pid} /T /F`, () => {});
     } else {
-      active.process.kill('SIGTERM');
-      setTimeout(() => {
-        if (active && active.status === 'stopping' && active.process) {
-          active.process.kill('SIGKILL');
-        }
-      }, 3000);
+      try {
+        active.process.kill('SIGKILL');
+      } catch {
+        active.process.kill('SIGTERM');
+      }
     }
   }
 
-  active.status = 'offline';
   active.stats = { cpu: 0, memory: 0, uptime: 0 };
   return { success: true, message: 'Bot arrestato con successo' };
 }
 
 export async function restartBot(botId: string): Promise<{ success: boolean; message: string }> {
-  await stopBot(botId);
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const active = activeBots.get(botId);
+  if (active) {
+    active.manuallyStopped = false;
+    if (active.restartTimeout) {
+      clearTimeout(active.restartTimeout);
+      active.restartTimeout = undefined;
+    }
+    if (active.statsInterval) {
+      clearInterval(active.statsInterval);
+      active.statsInterval = undefined;
+    }
+    if (active.process && active.process.pid) {
+      try {
+        if (process.platform === 'win32') {
+          exec(`taskkill /pid ${active.process.pid} /T /F`, () => {});
+        } else {
+          active.process.kill('SIGKILL');
+        }
+      } catch {}
+    }
+  }
+
+  broadcastLog(botId, `🔄 [Host Manager] Riavvio immediato del bot...`);
+  await new Promise((resolve) => setTimeout(resolve, 400));
   return await startBot(botId);
 }
 

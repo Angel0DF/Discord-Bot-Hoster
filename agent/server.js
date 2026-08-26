@@ -167,6 +167,7 @@ function startBotProcess(botId) {
       logs: existingLogs,
       startTime: Date.now(),
       restartsCount: 0,
+      manuallyStopped: false,
       stats: { cpu: 0, memory: 0, uptime: 0, pid: 0 },
     };
     activeProcesses.set(botId, active);
@@ -174,6 +175,8 @@ function startBotProcess(botId) {
     active.config = config;
     active.status = 'starting';
     active.startTime = Date.now();
+    active.manuallyStopped = false;
+    active.restartsCount = 0;
   }
 
   broadcastLog(botId, `⚡ [Proxmox Agent] Avvio comando: ${command} ${args.join(' ')}`);
@@ -216,18 +219,25 @@ function startBotProcess(botId) {
         if (active.statsInterval) clearInterval(active.statsInterval);
         active.stats = { cpu: 0, memory: 0, uptime: 0 };
 
-        // Keep-Alive Watchdog: Only auto-restart if crashed unexpectedly and not intentionally stopped/restarted
-        if (active.status !== 'stopped_by_user' && active.status !== 'restarting' && config.autoRestart !== false) {
+        // Keep-Alive Watchdog: NEVER auto-restart if the bot was manually stopped by user
+        if (active.manuallyStopped || !config.enabled || active.status === 'stopped_by_user' || active.status === 'offline' || active.status === 'restarting') {
+          if (active.status !== 'restarting') {
+            active.status = 'offline';
+          }
+          return;
+        }
+
+        // Only auto-restart if it crashed unexpectedly while meant to be online
+        if (config.autoRestart !== false) {
           active.restartsCount++;
           const delay = Math.min(10000, (config.restartDelay || 2000));
-          broadcastLog(botId, `🔄 [Auto-Restart] Tentativo di riavvio tra ${delay / 1000}s...`);
+          broadcastLog(botId, `🔄 [Auto-Restart] Crash imprevisto. Riavvio in corso tra ${delay / 1000}s...`);
           active.status = 'starting';
           active.restartTimeout = setTimeout(() => startBotProcess(botId), delay);
           return;
         }
-        if (active.status !== 'restarting') {
-          active.status = code === 0 ? 'offline' : 'error';
-        }
+
+        active.status = code === 0 ? 'offline' : 'error';
       }
     });
 
@@ -276,6 +286,7 @@ function stopBotProcess(botId) {
     return { success: true, message: 'Bot già offline' };
   }
 
+  active.manuallyStopped = true;
   active.status = 'stopped_by_user';
   if (active.restartTimeout) clearTimeout(active.restartTimeout);
   if (active.statsInterval) clearInterval(active.statsInterval);
@@ -287,7 +298,7 @@ function stopBotProcess(botId) {
     saveBots(allBots);
   }
 
-  broadcastLog(botId, `🛑 [Proxmox Agent] Arresto in corso...`);
+  broadcastLog(botId, `🛑 [Proxmox Agent] Arresto manuale del bot...`);
   const pid = active.process.pid;
 
   if (pid) {
@@ -310,6 +321,7 @@ function stopBotProcess(botId) {
 function restartBotProcess(botId) {
   const active = activeProcesses.get(botId);
   if (active) {
+    active.manuallyStopped = false;
     active.status = 'restarting';
     if (active.restartTimeout) clearTimeout(active.restartTimeout);
     if (active.statsInterval) clearInterval(active.statsInterval);
