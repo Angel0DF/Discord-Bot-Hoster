@@ -295,8 +295,10 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     if (items.length === 1 && items[0].kind === "file") {
       const file = items[0].getAsFile();
       if (file && isArchiveFile(file.name)) {
-        // Upload the archive file directly to the bot directory
-        uploadArchive(botId, displayName, file, currentPath);
+        setIsLoading(true);
+        await uploadArchive(botId, displayName, file, currentPath);
+        await fetchFiles(currentPath);
+        setIsLoading(false);
         return;
       }
     }
@@ -315,7 +317,11 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
         const f = item.getAsFile();
         if (f) {
           if (isArchiveFile(f.name)) {
-            uploadArchive(botId, displayName, f, currentPath);
+            setIsLoading(true);
+            await uploadArchive(botId, displayName, f, currentPath);
+            await fetchFiles(currentPath);
+            setIsLoading(false);
+            return;
           } else {
             queue.push({ relativePath: f.name, file: f });
           }
@@ -324,7 +330,10 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     }
 
     if (queue.length > 0) {
-      uploadFiles(botId, displayName, queue, currentPath);
+      setIsLoading(true);
+      await uploadFiles(botId, displayName, queue, currentPath);
+      await fetchFiles(currentPath);
+      setIsLoading(false);
     }
   };
 
@@ -335,13 +344,20 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     const queue: UploadQueueItem[] = [];
     for (const file of files) {
       if (isArchiveFile(file.name)) {
-        uploadArchive(botId, displayName, file, currentPath);
+        setIsLoading(true);
+        await uploadArchive(botId, displayName, file, currentPath);
+        await fetchFiles(currentPath);
+        setIsLoading(false);
+        return;
       } else {
         queue.push({ relativePath: file.name, file });
       }
     }
     if (queue.length > 0) {
-      uploadFiles(botId, displayName, queue, currentPath);
+      setIsLoading(true);
+      await uploadFiles(botId, displayName, queue, currentPath);
+      await fetchFiles(currentPath);
+      setIsLoading(false);
     }
   };
 
