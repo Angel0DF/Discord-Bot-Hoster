@@ -518,40 +518,84 @@ app.post('/api/bots/:id/files', (req, res) => {
 
   if (action === 'unzip') {
     if (!fs.existsSync(target)) {
-      return res.status(404).json({ success: false, error: 'Archivio non trovato' });
+      return res.status(404).json({ success: false, error: 'Archivio non trovato: ' + filePath });
     }
     const destDir = path.dirname(target);
     try {
       const ext = path.extname(target).toLowerCase();
-      if (ext === '.zip') {
-        if (AdmZip) {
+      let extracted = false;
+      let lastErr = null;
+
+      // 1. Try AdmZip for zip files
+      if (ext === '.zip' && AdmZip) {
+        try {
           const zip = new AdmZip(target);
           zip.extractAllTo(destDir, true);
-        } else if (process.platform === 'win32') {
-          execSync(`powershell -Command "Expand-Archive -Path '${target}' -DestinationPath '${destDir}' -Force"`);
-        } else {
-          execSync(`unzip -o "${target}" -d "${destDir}"`);
+          extracted = true;
+        } catch (err) {
+          lastErr = err;
         }
-      } else if (ext === '.tar' || ext === '.gz' || ext === '.tgz') {
-        execSync(`tar -xf "${target}" -C "${destDir}"`);
-      } else if (ext === '.rar') {
-        try {
-          execSync(`unrar x -o+ "${target}" "${destDir}"`);
-        } catch {
+      }
+
+      // 2. Try native system extraction tools (7z, unzip, tar, unrar)
+      if (!extracted) {
+        if (ext === '.zip') {
           try {
-            execSync(`7z x -y "${target}" -o"${destDir}"`);
+            execSync(`unzip -o "${target}" -d "${destDir}"`, { stdio: 'pipe' });
+            extracted = true;
+          } catch (e1) {
+            try {
+              execSync(`7z x -y "${target}" -o"${destDir}"`, { stdio: 'pipe' });
+              extracted = true;
+            } catch (e2) {
+              lastErr = e2;
+            }
+          }
+        } else if (ext === '.rar') {
+          try {
+            execSync(`7z x -y "${target}" -o"${destDir}"`, { stdio: 'pipe' });
+            extracted = true;
+          } catch (e1) {
+            try {
+              execSync(`unrar x -o+ "${target}" "${destDir}"`, { stdio: 'pipe' });
+              extracted = true;
+            } catch (e2) {
+              try {
+                execSync(`unrar-free -x "${target}" "${destDir}"`, { stdio: 'pipe' });
+                extracted = true;
+              } catch (e3) {
+                lastErr = e3;
+              }
+            }
+          }
+        } else if (ext === '.tar' || ext === '.gz' || ext === '.tgz' || ext === '.bz2') {
+          try {
+            execSync(`tar -xf "${target}" -C "${destDir}"`, { stdio: 'pipe' });
+            extracted = true;
           } catch (e) {
-            return res.status(500).json({ success: false, error: 'Impossibile estrarre file RAR. Installa unrar o 7zip sul server.' });
+            lastErr = e;
+          }
+        } else {
+          try {
+            execSync(`7z x -y "${target}" -o"${destDir}"`, { stdio: 'pipe' });
+            extracted = true;
+          } catch (e) {
+            lastErr = e;
           }
         }
       }
 
-      if (deleteAfter !== false) {
+      if (!extracted && lastErr) {
+        throw lastErr;
+      }
+
+      if (deleteAfter === true) {
         try { fs.unlinkSync(target); } catch {}
       }
       return res.json({ success: true, message: 'Archivio decompresso con successo' });
     } catch (err) {
-      return res.status(500).json({ success: false, error: err.message });
+      console.error('Extraction error:', err);
+      return res.status(500).json({ success: false, error: 'Errore estrazione: ' + (err.message || 'Installa p7zip-full o unzip sul server') });
     }
   }
 
