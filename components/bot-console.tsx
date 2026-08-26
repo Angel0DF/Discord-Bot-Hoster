@@ -29,27 +29,22 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
     let eventSource: EventSource | null = null;
     let fallbackInterval: NodeJS.Timeout | null = null;
 
-    // Immediate initial logs fetch
-    ApiClient.getBot(bot.id).then((res) => {
-      if (res && Array.isArray(res.logs) && !isDisposed) {
-        setLogs(res.logs);
-      }
-    });
-
-    const startFallbackPolling = () => {
-      if (fallbackInterval || isDisposed) return;
-      fallbackInterval = setInterval(async () => {
-        try {
-          const res = await ApiClient.getBot(bot.id);
-          if (res && Array.isArray(res.logs)) {
-            setLogs(res.logs);
-            setIsConnected(true);
-          }
-        } catch {
-          setIsConnected(false);
+    // Immediate initial fetch and continuous polling
+    const fetchLatestLogs = async () => {
+      if (isDisposed) return;
+      try {
+        const res = await ApiClient.getBot(bot.id);
+        if (res && Array.isArray(res.logs) && !isDisposed) {
+          setLogs(res.logs);
+          setIsConnected(true);
         }
-      }, 1500);
+      } catch {
+        // ignore
+      }
     };
+
+    fetchLatestLogs();
+    fallbackInterval = setInterval(fetchLatestLogs, 1200);
 
     const connectSSE = () => {
       try {
@@ -58,10 +53,6 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
 
         eventSource.onopen = () => {
           setIsConnected(true);
-          if (fallbackInterval) {
-            clearInterval(fallbackInterval);
-            fallbackInterval = null;
-          }
         };
 
         eventSource.onmessage = (event) => {
@@ -79,11 +70,10 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
         };
 
         eventSource.onerror = () => {
-          // If SSE encounters CORS or network error, activate fallback polling
-          startFallbackPolling();
+          fetchLatestLogs();
         };
       } catch {
-        startFallbackPolling();
+        fetchLatestLogs();
       }
     };
 

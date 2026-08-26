@@ -156,6 +156,26 @@ function startBotProcess(botId) {
     NODE_ENV: 'production',
   };
 
+  const { command, args } = resolveCommand(config, botDir);
+
+  const existingLogs = active ? active.logs : [];
+  if (!active) {
+    active = {
+      process: null,
+      config,
+      status: 'starting',
+      logs: existingLogs,
+      startTime: Date.now(),
+      restartsCount: 0,
+      stats: { cpu: 0, memory: 0, uptime: 0, pid: 0 },
+    };
+    activeProcesses.set(botId, active);
+  } else {
+    active.config = config;
+    active.status = 'starting';
+    active.startTime = Date.now();
+  }
+
   broadcastLog(botId, `⚡ [Proxmox Agent] Avvio comando: ${command} ${args.join(' ')}`);
 
   try {
@@ -166,24 +186,8 @@ function startBotProcess(botId) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    if (!active) {
-      active = {
-        process: child,
-        config,
-        status: 'starting',
-        logs: [],
-        startTime: Date.now(),
-        restartsCount: 0,
-        stats: { cpu: 0, memory: 0, uptime: 0, pid: child.pid },
-      };
-      activeProcesses.set(botId, active);
-    } else {
-      active.process = child;
-      active.config = config;
-      active.status = 'starting';
-      active.startTime = Date.now();
-      active.stats.pid = child.pid;
-    }
+    active.process = child;
+    active.stats.pid = child.pid;
 
     child.stdout?.on('data', (d) => {
       d.toString().split(/\r?\n/).filter(Boolean).forEach((line) => broadcastLog(botId, line));
