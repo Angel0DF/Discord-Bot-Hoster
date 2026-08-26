@@ -24,6 +24,8 @@ import {
   Sparkles,
   Play,
   Download,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 
 import { ApiClient } from "@/lib/api-client";
@@ -53,6 +55,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
   const [showCreateModal, setShowCreateModal] = useState<"file" | "folder" | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [extractingFile, setExtractingFile] = useState<string | null>(null);
+  const [extractSuccess, setExtractSuccess] = useState<string | null>(null);
 
   const { uploadFiles, uploadArchive, tasks } = useUpload();
 
@@ -60,6 +63,11 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const displayName = botName || "Bot";
+
+  const isArchiveFile = (name: string) => {
+    const lower = name.toLowerCase();
+    return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".tar.gz") || lower.endsWith(".tgz") || lower.endsWith(".tar") || lower.endsWith(".7z");
+  };
 
   const fetchFiles = async (subPath: string = "") => {
     setIsLoading(true);
@@ -77,6 +85,13 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
   };
 
   const loadFileContent = async (filePath: string) => {
+    if (isArchiveFile(filePath)) {
+      setSelectedFile(filePath);
+      setFileContent("");
+      setOriginalContent("");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const data = await ApiClient.getFiles(botId, filePath, true);
@@ -110,7 +125,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
-        if (selectedFile) {
+        if (selectedFile && !isArchiveFile(selectedFile)) {
           handleSaveFile();
         }
       }
@@ -121,7 +136,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
   }, [selectedFile, fileContent]);
 
   const handleSaveFile = async () => {
-    if (!selectedFile || isSaving) return;
+    if (!selectedFile || isSaving || isArchiveFile(selectedFile)) return;
     setIsSaving(true);
     try {
       const data = await ApiClient.saveFile(botId, {
@@ -164,8 +179,8 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     }
   };
 
-  const handleDelete = async (filePath: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (filePath: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!confirm(`Sei sicuro di voler eliminare "${filePath}"?`)) return;
 
     try {
@@ -185,20 +200,28 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     }
   };
 
-  // Manual server-side unzip trigger from file list button
-  const handleUnzipFile = async (filePath: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Manual server-side unzip trigger
+  const handleUnzipFile = async (filePath: string, deleteAfter: boolean = false, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setExtractingFile(filePath);
+    setExtractSuccess(null);
+
     try {
       const res = await ApiClient.saveFile(botId, {
         path: filePath,
         action: "unzip",
-        deleteAfter: false,
+        deleteAfter,
       });
+
       if (res.success) {
+        setExtractSuccess(`Archivio "${filePath}" estratto con successo!`);
+        if (deleteAfter && selectedFile === filePath) {
+          setSelectedFile(null);
+        }
         await fetchFiles(currentPath);
+        setTimeout(() => setExtractSuccess(null), 4000);
       } else {
-        alert(res.error || "Errore durante l'estrazione");
+        alert(res.error || "Errore durante l'estrazione dell'archivio");
       }
     } catch (err: any) {
       alert(err.message || "Errore durante l'estrazione");
@@ -271,8 +294,8 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     // Check if user dropped a single .zip or .rar archive
     if (items.length === 1 && items[0].kind === "file") {
       const file = items[0].getAsFile();
-      if (file && (file.name.toLowerCase().endsWith(".zip") || file.name.toLowerCase().endsWith(".rar") || file.name.toLowerCase().endsWith(".tar.gz"))) {
-        // Upload entire archive to server, then unzip on server!
+      if (file && isArchiveFile(file.name)) {
+        // Upload the archive file directly to the bot directory
         uploadArchive(botId, displayName, file, currentPath);
         return;
       }
@@ -291,7 +314,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
       } else if (item.kind === "file") {
         const f = item.getAsFile();
         if (f) {
-          if (f.name.toLowerCase().endsWith(".zip") || f.name.toLowerCase().endsWith(".rar")) {
+          if (isArchiveFile(f.name)) {
             uploadArchive(botId, displayName, f, currentPath);
           } else {
             queue.push({ relativePath: f.name, file: f });
@@ -309,14 +332,9 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
 
-    if (files.length === 1 && (files[0].name.toLowerCase().endsWith(".zip") || files[0].name.toLowerCase().endsWith(".rar"))) {
-      uploadArchive(botId, displayName, files[0], currentPath);
-      return;
-    }
-
     const queue: UploadQueueItem[] = [];
     for (const file of files) {
-      if (file.name.toLowerCase().endsWith(".zip") || file.name.toLowerCase().endsWith(".rar")) {
+      if (isArchiveFile(file.name)) {
         uploadArchive(botId, displayName, file, currentPath);
       } else {
         queue.push({ relativePath: file.name, file });
@@ -340,11 +358,6 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
     }
   };
 
-  const isArchiveFile = (name: string) => {
-    const lower = name.toLowerCase();
-    return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".tar.gz") || lower.endsWith(".tgz") || lower.endsWith(".tar");
-  };
-
   const getFileIcon = (name: string, isDirectory: boolean) => {
     if (isDirectory) return <Folder className="h-4 w-4 text-indigo-400" />;
     if (isArchiveFile(name)) return <FileArchive className="h-4 w-4 text-amber-400" />;
@@ -357,6 +370,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
 
   const isDirty = fileContent !== originalContent;
   const lineCount = fileContent.split("\n").length;
+  const isSelectedArchive = selectedFile ? isArchiveFile(selectedFile) : false;
 
   return (
     <div
@@ -370,7 +384,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
         type="file"
         ref={fileInputRef}
         multiple
-        accept=".zip,.rar,.tar,.gz,.js,.ts,.py,.json,.env,.txt,.md,*"
+        accept=".zip,.rar,.tar,.gz,.7z,.js,.ts,.py,.json,.env,.txt,.md,*"
         onChange={handleFileInput}
         className="hidden"
       />
@@ -391,9 +405,9 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
       {isDragging && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-indigo-950/90 backdrop-blur-md border-2 border-dashed border-indigo-400 p-8 text-center animate-pulse">
           <UploadCloud className="h-20 w-20 text-indigo-300 mb-3" />
-          <h3 className="text-xl font-bold text-white">Rilascia qui File, Cartelle o Archivi ZIP / RAR</h3>
+          <h3 className="text-xl font-bold text-white">Rilascia qui i tuoi File o Archivi (.ZIP / .RAR)</h3>
           <p className="text-xs text-indigo-200 mt-2 max-w-md">
-            I file e archivi compressi (.zip/.rar) verranno caricati in background ed estratti sul tuo server Proxmox anche se cambi pagina.
+            Il file compresso verrà caricato sul tuo server Proxmox e potrai scompattarlo quando vuoi con 1 click.
           </p>
         </div>
       )}
@@ -482,8 +496,8 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
           {files.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-4 text-center text-zinc-500 mt-6">
               <FileArchive className="h-8 w-8 mb-2 opacity-40 text-amber-400" />
-              <p className="text-xs font-medium text-zinc-300">Trascina .ZIP, .RAR o Cartelle</p>
-              <p className="text-[10px] text-zinc-500 mt-1">Caricati in background ed estratti</p>
+              <p className="text-xs font-medium text-zinc-300">Nessun file presente</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Carica un file .ZIP o una cartella</p>
             </div>
           ) : (
             <ul className="space-y-0.5">
@@ -496,7 +510,7 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
                   <li
                     key={item.path}
                     onClick={() => {
-                      if (!item.isDirectory && !isArchive) {
+                      if (!item.isDirectory) {
                         loadFileContent(item.path);
                       }
                     }}
@@ -514,12 +528,17 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
                     <div className="flex items-center gap-1">
                       {isArchive && (
                         <button
-                          onClick={(e) => handleUnzipFile(item.path, e)}
+                          onClick={(e) => handleUnzipFile(item.path, false, e)}
                           disabled={isItemExtracting}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-amber-400 hover:text-amber-300 transition-opacity"
-                          title="Estrai archivio (Unzip)"
+                          className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/30 transition-all"
+                          title="Scompatta archivio qui"
                         >
-                          <Archive className={`h-3 w-3 ${isItemExtracting ? "animate-spin" : ""}`} />
+                          {isItemExtracting ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Archive className="h-3 w-3" />
+                          )}
+                          <span>Estrai</span>
                         </button>
                       )}
                       <button
@@ -543,13 +562,62 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
           className="border-t border-zinc-800/80 p-2.5 text-center text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-zinc-800/40 cursor-pointer transition-colors flex items-center justify-center gap-1.5"
         >
           <Archive className="h-3.5 w-3.5 text-amber-400" />
-          Supporta .ZIP, .RAR e Cartelle
+          Carica .ZIP, .RAR o Cartelle
         </div>
       </div>
 
       {/* Editor Main Area */}
       <div className="flex flex-1 flex-col overflow-hidden bg-zinc-950">
-        {selectedFile ? (
+        {extractSuccess && (
+          <div className="bg-emerald-950/80 border-b border-emerald-800/80 px-4 py-2 flex items-center gap-2 text-xs text-emerald-300">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span>{extractSuccess}</span>
+          </div>
+        )}
+
+        {selectedFile && isSelectedArchive ? (
+          /* Archive Detail View with Action Buttons */
+          <div className="flex h-full flex-col items-center justify-center text-center p-8">
+            <div className="rounded-3xl border border-amber-500/30 bg-amber-950/10 p-8 max-w-md shadow-2xl">
+              <FileArchive className="h-16 w-16 mb-4 mx-auto text-amber-400 animate-bounce" />
+              <h3 className="text-lg font-bold text-white mb-1 font-mono">{selectedFile}</h3>
+              <p className="text-xs text-zinc-400 mb-6">
+                Archivio compresso pronto per l'estrazione sul tuo server Proxmox.
+              </p>
+
+              <div className="flex flex-col gap-2.5">
+                <button
+                  onClick={() => handleUnzipFile(selectedFile, false)}
+                  disabled={extractingFile === selectedFile}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
+                >
+                  {extractingFile === selectedFile ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
+                  📦 Estrai Tutto (Unzip Qui)
+                </button>
+
+                <button
+                  onClick={() => handleUnzipFile(selectedFile, true)}
+                  disabled={extractingFile === selectedFile}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 transition-all disabled:opacity-50"
+                >
+                  📦 Estrai ed Elimina file {selectedFile.split(".").pop()?.toUpperCase()}
+                </button>
+
+                <button
+                  onClick={() => handleDelete(selectedFile)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-950/30 py-2 transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Elimina Archivio
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : selectedFile ? (
           <>
             {/* Editor Toolbar */}
             <div className="flex items-center justify-between border-b border-zinc-800/80 bg-zinc-900/40 px-4 py-2">
@@ -601,9 +669,9 @@ export const FileEditor = ({ botId, botName }: FileEditorProps) => {
               className="cursor-pointer rounded-2xl border border-dashed border-zinc-800 hover:border-amber-500/50 bg-zinc-900/30 hover:bg-amber-950/10 p-8 transition-all max-w-sm"
             >
               <FileArchive className="h-12 w-12 mb-3 mx-auto text-amber-400/70" />
-              <p className="text-sm font-semibold text-zinc-200">Trascina qui File, Cartelle o archivi .ZIP / .RAR</p>
+              <p className="text-sm font-semibold text-zinc-200">Trascina qui il tuo file .ZIP / .RAR</p>
               <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
-                Gli archivi vengono caricati e decompressi automaticamente sul server Proxmox in background.
+                Verrà caricato nel File Manager e potrai cliccare su <b>"Estrai"</b> per scompattarlo.
               </p>
             </div>
           </div>
