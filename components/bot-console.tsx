@@ -27,7 +27,12 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let fallbackInterval: NodeJS.Timeout | null = null;
-    let isDisposed = false;
+    // Immediate initial logs fetch
+    ApiClient.getBot(bot.id).then((res) => {
+      if (res && Array.isArray(res.logs) && !isDisposed) {
+        setLogs(res.logs);
+      }
+    });
 
     const startFallbackPolling = () => {
       if (fallbackInterval || isDisposed) return;
@@ -41,7 +46,7 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
         } catch {
           setIsConnected(false);
         }
-      }, 2000);
+      }, 1500);
     };
 
     const connectSSE = () => {

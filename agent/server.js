@@ -344,6 +344,27 @@ app.get('/api/bots', (req, res) => {
   res.json({ success: true, bots: states });
 });
 
+app.get('/api/bots/:id', (req, res) => {
+  const { id } = req.params;
+  const bots = getBots();
+  const bot = bots.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ success: false, error: 'Bot non trovato' });
+
+  const active = activeProcesses.get(id);
+  const state = {
+    id: bot.id,
+    config: bot,
+    status: active ? active.status : 'offline',
+    pid: active ? active.pid : undefined,
+    startedAt: active ? active.startedAt : undefined,
+    stats: active ? active.stats : { cpu: 0, memory: 0, uptime: 0 },
+    logs: active ? active.logs : [],
+    restartsCount: active ? active.restartsCount : 0,
+  };
+
+  res.json({ success: true, bot: state });
+});
+
 app.post('/api/bots', (req, res) => {
   const { name, runtime = 'nodejs', mainFile, description, env, templateFiles } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'Nome obbligatorio' });
