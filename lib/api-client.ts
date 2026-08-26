@@ -65,13 +65,9 @@ export const ApiClient = {
   async testConnection(url: string, secret: string): Promise<{ success: boolean; message: string; data?: any }> {
     try {
       const cleanUrl = url.trim().replace(/\/+$/, "");
-      const res = await fetch(`${cleanUrl}/api/health`, {
+      const res = await fetch(`${cleanUrl}/api/health?secret=${encodeURIComponent(secret)}`, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${secret}`,
-          "x-agent-secret": secret,
-        },
+        mode: "cors",
       });
       const data = await res.json();
       if (res.ok && data.success) {
