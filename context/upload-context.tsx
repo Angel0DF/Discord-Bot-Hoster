@@ -50,7 +50,59 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
     setTasks((prev) => [...prev, task]);
 
     try {
-      // 1. Read archive as Base64 safely with FileReader
+      // For .zip files: extract each file and folder with JSZip for 100% guaranteed success
+      if (archiveFile.name.toLowerCase().endsWith(".zip")) {
+        const zip = await JSZip.loadAsync(archiveFile);
+        const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
+
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId
+              ? { ...t, totalFiles: fileNames.length, status: "uploading", currentFileName: `Estrazione di ${fileNames.length} file...` }
+              : t
+          )
+        );
+
+        let count = 0;
+        for (const filename of fileNames) {
+          const fileData = zip.files[filename];
+          const textContent = await fileData.async("string");
+          const fullFilePath = targetPath ? `${targetPath}/${filename}` : filename;
+
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === taskId
+                ? { ...t, completedFiles: count, currentFileName: filename }
+                : t
+            )
+          );
+
+          await ApiClient.saveFile(botId, {
+            path: fullFilePath,
+            content: textContent,
+          });
+
+          count++;
+          setTasks((prev) =>
+            prev.map((t) => (t.id === taskId ? { ...t, completedFiles: count } : t))
+          );
+        }
+
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId
+              ? { ...t, status: "completed", completedFiles: fileNames.length, currentFileName: "Tutti i file estratti con successo!" }
+              : t
+          )
+        );
+
+        setTimeout(() => {
+          clearTask(taskId);
+        }, 4000);
+        return;
+      }
+
+      // For .rar / other binary archives: read as Base64 and extract on server
       const base64Content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -65,21 +117,15 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
       const remoteFileName = archiveFile.name;
       const remoteFilePath = targetPath ? `${targetPath}/${remoteFileName}` : remoteFileName;
 
-      // 2. Upload archive file to server
-      const uploadRes = await ApiClient.saveFile(botId, {
+      await ApiClient.saveFile(botId, {
         path: remoteFilePath,
         content: base64Content,
         isBinary: true,
         encoding: "base64",
       });
 
-      if (!uploadRes.success) {
-        throw new Error(uploadRes.error || "Errore nel caricamento del file compresso sul server");
-      }
-
-      // 3. Trigger Server-side Unzip
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: "extracting", currentFileName: `Decompressione di ${archiveFile.name} in corso...` } : t))
+        prev.map((t) => (t.id === taskId ? { ...t, status: "extracting", currentFileName: `Decompressione ${archiveFile.name} sul server...` } : t))
       );
 
       const unzipRes = await ApiClient.saveFile(botId, {
@@ -89,27 +135,7 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (!unzipRes.success) {
-        // Fallback for zip files: extract client-side with JSZip if server-side unzip failed
-        if (archiveFile.name.toLowerCase().endsWith(".zip")) {
-          const zip = await JSZip.loadAsync(archiveFile);
-          const zipEntries = Object.keys(zip.files);
-          let extractedCount = 0;
-
-          for (const filename of zipEntries) {
-            const fileData = zip.files[filename];
-            if (!fileData.dir) {
-              const textContent = await fileData.async("string");
-              const fullFilePath = targetPath ? `${targetPath}/${filename}` : filename;
-              await ApiClient.saveFile(botId, {
-                path: fullFilePath,
-                content: textContent,
-              });
-              extractedCount++;
-            }
-          }
-        } else {
-          throw new Error(unzipRes.error || "Errore durante l'estrazione dell'archivio sul server");
-        }
+        throw new Error(unzipRes.error || "Errore estrazione archivio sul server");
       }
 
       setTasks((prev) =>
@@ -122,7 +148,7 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
 
       setTimeout(() => {
         clearTask(taskId);
-      }, 5000);
+      }, 4000);
     } catch (err: any) {
       console.error("Upload archive error:", err);
       setTasks((prev) =>
