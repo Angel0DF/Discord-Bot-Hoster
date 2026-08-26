@@ -126,9 +126,31 @@ function startBotProcess(botId) {
   const botDir = path.join(BOTS_DIR, botId);
   if (!fs.existsSync(botDir)) fs.mkdirSync(botDir, { recursive: true });
 
-  const { command, args } = resolveCommand(config, botDir);
+  // Parse any .env file on disk if present
+  let diskEnv = {};
+  const envFilePath = path.join(botDir, '.env');
+  if (fs.existsSync(envFilePath)) {
+    try {
+      const lines = fs.readFileSync(envFilePath, 'utf8').split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq > 0) {
+          const k = trimmed.substring(0, eq).trim();
+          let v = trimmed.substring(eq + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.substring(1, v.length - 1);
+          }
+          if (k) diskEnv[k] = v;
+        }
+      }
+    } catch {}
+  }
+
   const env = {
     ...process.env,
+    ...diskEnv,
     ...(config.env || {}),
     BOT_ID: botId,
     NODE_ENV: 'production',

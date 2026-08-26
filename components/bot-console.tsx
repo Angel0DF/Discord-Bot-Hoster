@@ -25,8 +25,10 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
 
   // SSE Stream with Fallback Polling
   useEffect(() => {
+    let isDisposed = false;
     let eventSource: EventSource | null = null;
     let fallbackInterval: NodeJS.Timeout | null = null;
+
     // Immediate initial logs fetch
     ApiClient.getBot(bot.id).then((res) => {
       if (res && Array.isArray(res.logs) && !isDisposed) {
