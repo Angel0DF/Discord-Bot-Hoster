@@ -42,9 +42,9 @@ cloudflared tunnel --url http://localhost:4000
             <Globe className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white">Guida Rapida: Netlify + Server Proxmox VE</h3>
+            <h3 className="text-base font-bold text-white">Guida Rapida: Vercel + Server Proxmox VE</h3>
             <p className="text-xs text-zinc-400">
-              Hostare il frontend su Netlify e collegarlo in totale sicurezza al tuo server casalingo Proxmox.
+              Hostare il pannello su Vercel e collegarlo in totale sicurezza al tuo server casalingo Proxmox.
             </p>
           </div>
         </div>
@@ -54,10 +54,10 @@ cloudflared tunnel --url http://localhost:4000
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
             <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold mb-1">
               <Cloud className="h-4 w-4" />
-              Passo 1: Deploy su Netlify
+              Passo 1: Deploy su Vercel
             </div>
             <p className="text-[11px] text-zinc-400">
-              Collega questo repository GitHub al tuo account Netlify (o fai drag & drop della build). Netlify userà il file <code>netlify.toml</code> già configurato.
+              Collega questo repository GitHub al tuo account Vercel con le variabili d'ambiente <code>NEXT_PUBLIC_PROXMOX_AGENT_URL</code> e Secret.
             </p>
           </div>
 
@@ -74,10 +74,10 @@ cloudflared tunnel --url http://localhost:4000
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold mb-1">
               <ShieldCheck className="h-4 w-4" />
-              Passo 3: Connetti Sicuro (Tunnel)
+              Passo 3: Connetti Sicuro (DuckDNS)
             </div>
             <p className="text-[11px] text-zinc-400">
-              Usa un Cloudflare Tunnel gratuito o DuckDNS per collegare Netlify all'Agent senza dover aprire porte sul router di casa.
+              Usa Nginx Proxy Manager e DuckDNS (es. <code>dbhoster.duckdns.org</code>) per collegare il pannello all'Agent con certificato SSL.
             </p>
           </div>
         </div>

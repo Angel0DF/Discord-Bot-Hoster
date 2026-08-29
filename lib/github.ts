@@ -127,3 +127,4 @@ export function buildAuthenticatedRepoUrl(repoFullNameOrUrl: string, token?: str
 
   return `https://${activeToken}@github.com/${fullName}.git`;
 }
+

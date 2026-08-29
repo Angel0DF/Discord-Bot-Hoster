@@ -238,3 +238,4 @@ export const GitHubConnectModal = ({
     </div>
   );
 };
+

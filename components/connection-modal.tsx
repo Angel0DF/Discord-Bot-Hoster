@@ -65,9 +65,9 @@ export const ConnectionModal = ({ isOpen, onClose, onConnectionChanged }: Connec
             <Server className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">Connessione Proxmox Agent (Netlify)</h2>
+            <h2 className="text-lg font-bold text-white">Connessione Proxmox Agent</h2>
             <p className="text-xs text-zinc-400">
-              Collega la tua dashboard Netlify al server casalingo Proxmox.
+              Collega la tua dashboard al server casalingo Proxmox.
             </p>
           </div>
         </div>
