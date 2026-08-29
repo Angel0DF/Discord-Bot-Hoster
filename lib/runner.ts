@@ -189,7 +189,7 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
       active = {
         process: child,
         config,
-        status: 'starting',
+        status: child.pid ? 'online' : 'starting',
         logs: [],
         startTime: Date.now(),
         restartsCount: 0,
@@ -200,7 +200,7 @@ export async function startBot(botId: string): Promise<{ success: boolean; messa
     } else {
       active.process = child;
       active.config = config;
-      active.status = 'starting';
+      active.status = child.pid ? 'online' : 'starting';
       active.startTime = Date.now();
       active.stats.pid = child.pid;
       active.manuallyStopped = false;

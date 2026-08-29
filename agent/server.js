@@ -190,9 +190,15 @@ function startBotProcess(botId) {
     });
 
     active.process = child;
-    active.stats.pid = child.pid;
+    if (child.pid) {
+      active.status = 'online';
+      active.stats.pid = child.pid;
+    }
 
     child.stdout?.on('data', (d) => {
+      if (active && active.status !== 'online') {
+        active.status = 'online';
+      }
       d.toString().split(/\r?\n/).filter(Boolean).forEach((line) => broadcastLog(botId, line));
     });
 
@@ -392,10 +398,18 @@ app.get('/api/bots', (req, res) => {
   const configs = getBots();
   const states = configs.map((config) => {
     const active = activeProcesses.get(config.id);
+    let status = 'offline';
+    if (active) {
+      if (active.process && active.process.pid && !active.process.killed) {
+        status = 'online';
+      } else {
+        status = active.status;
+      }
+    }
     return {
       id: config.id,
       config,
-      status: active ? active.status : 'offline',
+      status,
       stats: active ? active.stats : { cpu: 0, memory: 0, uptime: 0 },
       logs: active ? active.logs : [],
       restartsCount: active ? active.restartsCount : 0,
@@ -594,10 +608,19 @@ app.get('/api/bots/:id', (req, res) => {
 
   const active = activeProcesses.get(id);
   const gitStatus = getBotGitStatus(id);
+  let status = 'offline';
+  if (active) {
+    if (active.process && active.process.pid && !active.process.killed) {
+      status = 'online';
+    } else {
+      status = active.status;
+    }
+  }
+
   const state = {
     id: bot.id,
     config: bot,
-    status: active ? active.status : 'offline',
+    status,
     pid: active ? active.pid : undefined,
     startedAt: active ? active.startedAt : undefined,
     stats: active ? active.stats : { cpu: 0, memory: 0, uptime: 0 },
