@@ -29,13 +29,13 @@ export const GlowingCard = ({
     <div
       className={cn(
         "group relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-6 backdrop-blur-xl transition-all duration-300 hover:border-zinc-700/80 hover:shadow-2xl hover:shadow-indigo-500/10",
-        borderGlow && "before:absolute before:inset-0 before:-z-10 before:rounded-2xl before:bg-gradient-to-b " + colorMap[glowColor],
+        borderGlow && "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-2xl before:bg-gradient-to-b " + colorMap[glowColor],
         className
       )}
       {...props}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none" />
-      {children}
+      <div className="relative z-10 w-full h-full flex flex-col justify-between">{children}</div>
     </div>
   );
 };

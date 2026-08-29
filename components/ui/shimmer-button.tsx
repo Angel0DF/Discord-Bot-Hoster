@@ -46,14 +46,14 @@ export const ShimmerButton = React.forwardRef<HTMLButtonElement, ShimmerButtonPr
         {...props}
       >
         {/* spark container */}
-        <div className="absolute inset-0 -z-30 overflow-visible [container-type:size]">
-          <div className="absolute inset-0 h-[100cqh] animate-shimmer [aspect-ratio:1] [border-radius:0] [mask:none]">
-            <div className="animate-spin [animation-duration:4s] absolute -inset-full w-auto rotate-0 [background:conic-gradient(from_0deg,transparent_0_340deg,white_360deg)] [translate:0_0]" />
+        <div className="pointer-events-none absolute inset-0 -z-30 overflow-visible [container-type:size]">
+          <div className="pointer-events-none absolute inset-0 h-[100cqh] animate-shimmer [aspect-ratio:1] [border-radius:0] [mask:none]">
+            <div className="pointer-events-none animate-spin [animation-duration:4s] absolute -inset-full w-auto rotate-0 [background:conic-gradient(from_0deg,transparent_0_340deg,white_360deg)] [translate:0_0]" />
           </div>
         </div>
         {/* backdrop */}
-        <div className="absolute [background:var(--bg)] [border-radius:var(--radius)] [inset:var(--cut)] -z-20 bg-zinc-950/90 transition-all duration-300 group-hover:bg-zinc-900/90" />
-        <span className="relative z-10 flex items-center gap-2">{children}</span>
+        <div className="pointer-events-none absolute [background:var(--bg)] [border-radius:var(--radius)] [inset:var(--cut)] -z-20 bg-zinc-950/90 transition-all duration-300 group-hover:bg-zinc-900/90" />
+        <span className="pointer-events-none relative z-10 flex items-center gap-2">{children}</span>
       </button>
     );
   }
