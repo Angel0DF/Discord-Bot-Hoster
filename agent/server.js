@@ -731,26 +731,63 @@ app.post('/api/bots/:id/git/clone', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/bots/:id/webhook', (req, res) => {
-  const { id } = req.params;
+// Universal and Bot-specific Webhook Handler
+function handleGitHubWebhook(req, res, targetBotId) {
   const bots = getBots();
-  const bot = bots.find((b) => b.id === id);
-  if (!bot) return res.status(404).json({ success: false, error: 'Bot non trovato' });
-
   const event = req.headers['x-github-event'] || 'push';
   const ref = req.body?.ref || '';
-  const expectedBranch = bot.gitBranch || 'main';
+  const repoFullName = req.body?.repository?.full_name || '';
+  const repoCloneUrl = req.body?.repository?.clone_url || '';
+  const repoName = req.body?.repository?.name || '';
 
-  broadcastLog(id, `🪝 [GitHub Webhook] Ricevuto evento "${event}" (ref: ${ref || 'nessun ref'})`);
-
-  if (ref && !ref.endsWith(`/${expectedBranch}`)) {
-    broadcastLog(id, `ℹ️ [GitHub Webhook] Push ignorato (branch ${ref} diverso da ${expectedBranch})`);
-    return res.json({ success: true, ignored: true, message: 'Branch non monitorato' });
+  // Find matching bots (either by specific botId, or matching repo URL/name)
+  let matchingBots = [];
+  if (targetBotId) {
+    const directBot = bots.find((b) => b.id === targetBotId);
+    if (directBot) matchingBots.push(directBot);
   }
 
-  // Execute pull + dependencies + restart
-  const result = performGitPull(id);
-  res.json({ success: true, deployed: true, result });
+  if (matchingBots.length === 0 && (repoFullName || repoName)) {
+    matchingBots = bots.filter((b) => {
+      if (!b.gitRepo) return false;
+      const cleanUrl = b.gitRepo.toLowerCase();
+      return (
+        (repoFullName && cleanUrl.includes(repoFullName.toLowerCase())) ||
+        (repoCloneUrl && cleanUrl.includes(repoCloneUrl.toLowerCase())) ||
+        (repoName && cleanUrl.endsWith(`/${repoName.toLowerCase()}.git`)) ||
+        (repoName && cleanUrl.endsWith(`/${repoName.toLowerCase()}`))
+      );
+    });
+  }
+
+  if (matchingBots.length === 0) {
+    console.log(`[GitHub Webhook] Nessun bot corrispondente trovato per repository: ${repoFullName || targetBotId}`);
+    return res.json({ success: true, message: 'Nessun bot configurato per questo repository' });
+  }
+
+  const results = [];
+  for (const bot of matchingBots) {
+    const expectedBranch = bot.gitBranch || 'main';
+    broadcastLog(bot.id, `🪝 [GitHub Webhook] Ricevuto push per ${repoFullName || bot.name} (ref: ${ref || 'default'})`);
+
+    if (ref && !ref.endsWith(`/${expectedBranch}`)) {
+      broadcastLog(bot.id, `ℹ️ [GitHub Webhook] Push ignorato (branch ${ref} non corrisponde a ${expectedBranch})`);
+      continue;
+    }
+
+    const pullResult = performGitPull(bot.id);
+    results.push({ botId: bot.id, botName: bot.name, result: pullResult });
+  }
+
+  res.json({ success: true, deployed: true, count: matchingBots.length, results });
+}
+
+app.post('/api/bots/:id/webhook', (req, res) => {
+  handleGitHubWebhook(req, res, req.params.id);
+});
+
+app.post('/api/github/webhook', (req, res) => {
+  handleGitHubWebhook(req, res, null);
 });
 
 app.get('/api/bots/:id/logs', (req, res) => {
