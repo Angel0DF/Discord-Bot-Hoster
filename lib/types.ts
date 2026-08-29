@@ -50,6 +50,26 @@ export interface GitSyncStatus {
   error?: string;
 }
 
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  html_url: string;
+  clone_url: string;
+  default_branch: string;
+  description?: string;
+  updated_at: string;
+  language?: string;
+}
+
+export interface GitHubAccount {
+  token: string;
+  username: string;
+  avatar_url?: string;
+  name?: string;
+}
+
 export interface BotState {
   id: string;
   config: BotConfig;

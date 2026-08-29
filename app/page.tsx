@@ -7,6 +7,7 @@ import { BotCard } from "@/components/bot-card";
 import { BotDetailView } from "@/components/bot-detail-view";
 import { CreateBotModal } from "@/components/create-bot-modal";
 import { ConnectionModal } from "@/components/connection-modal";
+import { GitHubConnectModal } from "@/components/github-connect-modal";
 import { ProxmoxSetupGuide } from "@/components/proxmox-setup-guide";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
@@ -20,6 +21,7 @@ export default function Home() {
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<"bots" | "proxmox">("bots");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -111,6 +113,7 @@ export default function Home() {
       <Navbar
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
+        onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
         onRefresh={refreshAll}
         isRefreshing={isRefreshing}
         isConnected={isConnected}
@@ -266,6 +269,13 @@ export default function Home() {
         isOpen={isConnectionModalOpen}
         onClose={() => setIsConnectionModalOpen(false)}
         onConnectionChanged={refreshAll}
+      />
+
+      {/* GitHub Account Connect Modal */}
+      <GitHubConnectModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
+        onAccountChanged={refreshAll}
       />
     </div>
   );

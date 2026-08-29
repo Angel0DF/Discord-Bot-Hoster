@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { BotState, BotRuntime } from "@/lib/types";
 import { GlowingCard } from "./ui/glowing-card";
 import { Settings, Save, Trash2, Check, AlertTriangle, GitBranch, GitPullRequest, Webhook, RefreshCw, Copy } from "lucide-react";
+import { GitHubRepoPicker } from "./github-repo-picker";
+import { GitHubConnectModal } from "./github-connect-modal";
 
 import { ApiClient } from "@/lib/api-client";
 
@@ -26,6 +28,7 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
   const [saved, setSaved] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const [cloneMsg, setCloneMsg] = useState<string | null>(null);
+  const [showConnectModal, setShowConnectModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -236,13 +239,24 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
           <div>
             <h3 className="text-base font-bold text-white">Repository GitHub & Sincronizzazione</h3>
             <p className="text-xs text-zinc-400">
-              Collega il repository del tuo bot per aggiornamenti in tempo reale e deploy automatico tramite Webhook.
+              Collega o seleziona il repository GitHub per il download e la sincronizzazione automatica.
             </p>
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* GitHub Repo Quick Picker */}
+          <GitHubRepoPicker
+            selectedRepoUrl={gitRepo}
+            selectedBranch={gitBranch}
+            onSelect={({ repoUrl, branch }) => {
+              setGitRepo(repoUrl);
+              setGitBranch(branch || "main");
+            }}
+            onOpenConnectModal={() => setShowConnectModal(true)}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-zinc-300 mb-1">
                 GitHub Repository URL
@@ -254,9 +268,6 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
                 placeholder="https://github.com/username/discord-bot"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-purple-500"
               />
-              <p className="text-[11px] text-zinc-500 mt-1">
-                Per repository privati usa il formato: <code>https://TOKEN@github.com/user/repo</code>
-              </p>
             </div>
 
             <div>
@@ -281,7 +292,7 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <div className="text-[11px] text-zinc-400">
-              Usa <b>"Clona / Risincronizza Repository"</b> per scaricare tutti i file da GitHub nella cartella del bot.
+              Usa <b>"Clona da GitHub"</b> per scaricare tutti i file del repository nella cartella del bot.
             </div>
 
             <div className="flex items-center gap-2">
@@ -289,7 +300,7 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
                 type="button"
                 onClick={handleCloneRepo}
                 disabled={isCloning || !gitRepo.trim()}
-                className="flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <GitPullRequest className={`h-4 w-4 ${isCloning ? "animate-spin" : ""}`} />
                 {isCloning ? "Clonazione in corso..." : "Clona da GitHub"}
@@ -298,6 +309,11 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
           </div>
         </div>
       </GlowingCard>
+
+      <GitHubConnectModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+      />
 
       {/* Danger Zone */}
       <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6">

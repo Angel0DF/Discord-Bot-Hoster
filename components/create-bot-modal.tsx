@@ -3,6 +3,8 @@ import React, { useState, useRef } from "react";
 import { BOT_TEMPLATES, BotTemplate } from "@/lib/templates";
 import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen, FileArchive } from "lucide-react";
 import { ShimmerButton } from "./ui/shimmer-button";
+import { GitHubRepoPicker } from "./github-repo-picker";
+import { GitHubConnectModal } from "./github-connect-modal";
 import { ApiClient } from "@/lib/api-client";
 import JSZip from "jszip";
 
@@ -24,6 +26,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
   const [discordToken, setDiscordToken] = useState("");
   const [gitRepoUrl, setGitRepoUrl] = useState("");
   const [gitBranch, setGitBranch] = useState("main");
+  const [showConnectModal, setShowConnectModal] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -352,11 +355,24 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
           {/* Bot details */}
           <div className="space-y-4">
             {/* GitHub Repo option */}
-            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3.5 space-y-2">
+            <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-3.5 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-purple-300">Oppure Clona da Repository GitHub</span>
+                <span className="text-xs font-bold text-purple-300">Oppure Clona da Repository GitHub</span>
                 <span className="text-[10px] text-zinc-400">Opzionale</span>
               </div>
+
+              <GitHubRepoPicker
+                selectedRepoUrl={gitRepoUrl}
+                selectedBranch={gitBranch}
+                onSelect={({ repoUrl, branch, repoName, description }) => {
+                  setGitRepoUrl(repoUrl);
+                  setGitBranch(branch || "main");
+                  if (!botName) setBotName(repoName);
+                  if (!botDescription && description) setBotDescription(description);
+                }}
+                onOpenConnectModal={() => setShowConnectModal(true)}
+              />
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <input
                   type="text"
@@ -368,7 +384,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
                       setBotName(parts[parts.length - 1].replace(".git", ""));
                     }
                   }}
-                  placeholder="https://github.com/user/bot-repo"
+                  placeholder="Oppure incolla URL GitHub manualmente"
                   className="sm:col-span-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 outline-none focus:border-purple-500"
                 />
                 <input
@@ -414,17 +430,22 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              className="rounded-xl px-4 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer"
             >
               Annulla
             </button>
-            <ShimmerButton type="submit" disabled={isLoading} className="h-10 px-5 text-xs">
+            <ShimmerButton type="submit" disabled={isLoading} className="h-10 px-5 text-xs cursor-pointer">
               {isLoading ? "Creazione in corso..." : "Crea e Configura Bot"}
               <ArrowRight className="h-4 w-4 ml-2" />
             </ShimmerButton>
           </div>
         </form>
       </div>
+
+      <GitHubConnectModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+      />
     </div>
   );
 };
