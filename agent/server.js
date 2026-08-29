@@ -512,9 +512,15 @@ function performGitPull(botId) {
       }
     }
 
-    if (wasOnline) {
-      broadcastLog(botId, `⚡ [GitHub Sync] Riavvio del bot con il nuovo codice...`);
+    const bots = getBots();
+    const botConfig = bots.find((b) => b.id === botId);
+    const shouldRestart = wasOnline || (botConfig && botConfig.enabled !== false && botConfig.autoRestart !== false);
+
+    if (shouldRestart) {
+      broadcastLog(botId, `⚡ [GitHub Sync] Riavvio immediato del bot con il nuovo codice...`);
       restartBotProcess(botId);
+    } else {
+      broadcastLog(botId, `ℹ️ [GitHub Sync] Codice aggiornato. Il bot è attualmente offline.`);
     }
 
     const updatedStatus = getBotGitStatus(botId);
