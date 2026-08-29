@@ -84,9 +84,107 @@ export const GitHubSyncWidget = ({
   };
 
   if (!gitStatus || !gitStatus.isGit) {
-    if (!gitRepo) {
-      return null;
-    }
+    return (
+      <>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-purple-500/30 bg-purple-950/20 px-4 py-3 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400">
+              <GitBranch className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-white">Collega Repository GitHub</span>
+                <span className="rounded bg-purple-500/20 px-1.5 py-0.5 font-mono text-[10px] text-purple-300 border border-purple-500/30">
+                  Pronto per Auto-Deploy
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Vai nella scheda <b>Impostazioni</b> per inserire l'URL di GitHub, oppure usa il <b>Webhook</b> qui a destra.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowWebhookModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-600/30 px-3 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-600/50 transition-colors shadow-sm cursor-pointer"
+            >
+              <Webhook className="h-3.5 w-3.5 text-purple-300" />
+              <span>Copia Link Webhook</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Webhook Configuration Modal */}
+        {showWebhookModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    <Webhook className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">GitHub Webhook (Auto-Deploy)</h3>
+                    <p className="text-xs text-zinc-400">Aggiorna e riavvia il bot in automatico a ogni git push</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowWebhookModal(false)}
+                  className="text-xs text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs text-zinc-300">
+                <p>
+                  1. Vai sul tuo repository su <b>GitHub &gt; Settings &gt; Webhooks &gt; Add webhook</b>.
+                </p>
+                <p>
+                  2. Incolla questo <b>Payload URL</b>:
+                </p>
+
+                <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={webhookUrl}
+                    className="w-full bg-transparent font-mono text-xs text-indigo-300 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyWebhook}
+                    className="flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shrink-0 cursor-pointer"
+                  >
+                    {copiedWebhook ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {copiedWebhook ? "Copiato!" : "Copia"}
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-3 space-y-1 text-zinc-400">
+                  <p>• <b>Content type:</b> <code className="text-white">application/json</code></p>
+                  <p>• <b>Which events would you like to trigger:</b> <code className="text-white">Just the push event.</code></p>
+                  <p>• <b>Active:</b> <code className="text-emerald-400">Spuntato (Attivo)</code></p>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWebhookModal(false)}
+                  className="rounded-lg bg-zinc-800 px-4 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 transition-colors cursor-pointer"
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
   }
 
   const isUpToDate = gitStatus?.synced;
