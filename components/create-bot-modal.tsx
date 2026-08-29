@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef } from "react";
 import { BOT_TEMPLATES, BotTemplate } from "@/lib/templates";
-import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen, FileArchive } from "lucide-react";
+import { X, Bot, Sparkles, Check, Code, FileText, ArrowRight, UploadCloud, Upload, FolderOpen, FileArchive, GitBranch } from "lucide-react";
 import { ShimmerButton } from "./ui/shimmer-button";
 import { GitHubRepoPicker } from "./github-repo-picker";
 import { GitHubConnectModal } from "./github-connect-modal";
@@ -20,6 +20,7 @@ interface UploadedFileItem {
 }
 
 export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModalProps) => {
+  const [sourceType, setSourceType] = useState<"github" | "upload" | "template">("github");
   const [selectedTemplate, setSelectedTemplate] = useState<BotTemplate>(BOT_TEMPLATES[0]);
   const [botName, setBotName] = useState("");
   const [botDescription, setBotDescription] = useState("");
@@ -278,87 +279,62 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
         )}
 
         <form onSubmit={handleCreate} className="mt-6 space-y-5">
-          {/* Template Selection */}
+          {/* Source Type Navigation Tabs */}
           <div>
             <label className="block text-xs font-semibold text-zinc-300 mb-2">
-              1. Seleziona il Template / Linguaggio
+              1. Scegli da dove importare il Bot
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {BOT_TEMPLATES.map((tmpl) => {
-                const isSelected = selectedTemplate.id === tmpl.id;
-                return (
-                  <div
-                    key={tmpl.id}
-                    onClick={() => setSelectedTemplate(tmpl)}
-                    className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
-                      isSelected
-                        ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500/50"
-                        : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-indigo-300">
-                        {tmpl.runtime}
-                      </span>
-                      {isSelected && <Check className="h-4 w-4 text-indigo-400" />}
-                    </div>
-                    <h4 className="mt-2 text-sm font-semibold text-white">{tmpl.name}</h4>
-                    <p className="mt-1 text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                      {tmpl.description}
-                    </p>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-zinc-900/90 border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setSourceType("github")}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  sourceType === "github"
+                    ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <GitBranch className="h-4 w-4" />
+                Da GitHub
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceType("upload")}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  sourceType === "upload"
+                    ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <FileArchive className="h-4 w-4" />
+                Carica ZIP / File
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceType("template")}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  sourceType === "template"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <Code className="h-4 w-4" />
+                Template Pronti
+              </button>
             </div>
           </div>
 
-          {/* Drag and Drop Zone for Folders, Zips & Files */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center justify-between">
-              <span>Oppure Carica un archivio .ZIP / .RAR o una Cartella</span>
-              {uploadedFiles.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setUploadedFiles([])}
-                  className="text-[10px] text-rose-400 hover:underline"
-                >
-                  Rimuovi file caricati ({uploadedFiles.length})
-                </button>
-              )}
-            </label>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`cursor-pointer rounded-xl border border-dashed p-5 text-center transition-all ${
-                isDragging
-                  ? "border-amber-400 bg-amber-950/20 scale-[1.01]"
-                  : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/60"
-              }`}
-            >
-              <FileArchive className="h-7 w-7 mx-auto text-amber-400/90 mb-1.5" />
-              <p className="text-xs font-medium text-zinc-200">
-                {uploadedFiles.length > 0
-                  ? `✅ ${uploadedFiles.length} file estratti pronti per il bot`
-                  : "Trascina qui il file .ZIP, .RAR o l'intera Cartella del tuo Bot"}
-              </p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">
-                Verrà decompresso e importato istantaneamente
-              </p>
-            </div>
-          </div>
-
-          {/* Bot details */}
-          <div className="space-y-4">
-            {/* GitHub Repo option */}
-            <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-3.5 space-y-3">
+          {/* TAB 1: GITHUB */}
+          {sourceType === "github" && (
+            <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4 space-y-3 animate-fadeIn">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-300">Oppure Clona da Repository GitHub</span>
-                <span className="text-[10px] text-zinc-400">Opzionale</span>
+                <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                  <GitBranch className="h-4 w-4 text-purple-400" />
+                  Seleziona Repository dal tuo Account GitHub
+                </span>
+                <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold text-purple-300 border border-purple-500/30">
+                  Auto-Deploy & Webhook
+                </span>
               </div>
 
               <GitHubRepoPicker
@@ -373,7 +349,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
                 onOpenConnectModal={() => setShowConnectModal(true)}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                 <input
                   type="text"
                   value={gitRepoUrl}
@@ -396,7 +372,88 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
                 />
               </div>
             </div>
+          )}
 
+          {/* TAB 2: UPLOAD ZIP / FOLDER */}
+          {sourceType === "upload" && (
+            <div className="space-y-2 animate-fadeIn">
+              <div className="flex items-center justify-between text-xs text-zinc-300">
+                <span className="font-semibold">Trascina o seleziona i file</span>
+                {uploadedFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUploadedFiles([])}
+                    className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+                  >
+                    Rimuovi file caricati ({uploadedFiles.length})
+                  </button>
+                )}
+              </div>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`cursor-pointer rounded-xl border border-dashed p-6 text-center transition-all ${
+                  isDragging
+                    ? "border-amber-400 bg-amber-950/20 scale-[1.01]"
+                    : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/60"
+                }`}
+              >
+                <FileArchive className="h-8 w-8 mx-auto text-amber-400/90 mb-2" />
+                <p className="text-xs font-medium text-zinc-200">
+                  {uploadedFiles.length > 0
+                    ? `✅ ${uploadedFiles.length} file estratti pronti per il bot`
+                    : "Trascina qui il file .ZIP, .RAR o l'intera Cartella del tuo Bot"}
+                </p>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Verrà decompresso e importato istantaneamente sul server Proxmox
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: READY TEMPLATES */}
+          {sourceType === "template" && (
+            <div className="space-y-2 animate-fadeIn">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {BOT_TEMPLATES.map((tmpl) => {
+                  const isSelected = selectedTemplate.id === tmpl.id;
+                  return (
+                    <div
+                      key={tmpl.id}
+                      onClick={() => {
+                        setSelectedTemplate(tmpl);
+                        if (!botName) setBotName(tmpl.id === "empty" ? "CustomBot" : tmpl.name.split(" ")[0]);
+                      }}
+                      className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
+                        isSelected
+                          ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500/50"
+                          : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-indigo-300">
+                          {tmpl.runtime}
+                        </span>
+                        {isSelected && <Check className="h-4 w-4 text-indigo-400" />}
+                      </div>
+                      <h4 className="mt-2 text-sm font-semibold text-white">{tmpl.name}</h4>
+                      <p className="mt-1 text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                        {tmpl.description}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Bot details */}
+          <div className="space-y-4 pt-2">
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1">
                 2. Nome del Bot <span className="text-rose-400">*</span>
@@ -406,7 +463,7 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
                 required
                 value={botName}
                 onChange={(e) => setBotName(e.target.value)}
-                placeholder="es. ProxmoxManager, ModerationBot, MusicBot"
+                placeholder="es. MBOT, MusicBot, ModerationBot"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-indigo-500"
               />
             </div>
