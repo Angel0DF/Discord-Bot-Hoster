@@ -62,6 +62,10 @@ function getHeaders(customSecret?: string): HeadersInit {
 }
 
 export const ApiClient = {
+  getAgentUrl(): string {
+    return getBaseUrl();
+  },
+
   async testConnection(url: string, secret: string): Promise<{ success: boolean; message: string; data?: any }> {
     try {
       const cleanUrl = url.trim().replace(/\/+$/, "");
@@ -232,6 +236,45 @@ export const ApiClient = {
     try {
       const base = getBaseUrl();
       const res = await fetch(`${base}/api/bots/${id}/files`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async getGitStatus(id: string): Promise<any> {
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(`${base}/api/bots/${id}/git/status`, {
+        headers: getHeaders(),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async pullGit(id: string): Promise<any> {
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(`${base}/api/bots/${id}/git/pull`, {
+        method: "POST",
+        headers: getHeaders(),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async cloneGit(id: string, payload: { repoUrl: string; branch?: string }): Promise<any> {
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(`${base}/api/bots/${id}/git/clone`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(payload),

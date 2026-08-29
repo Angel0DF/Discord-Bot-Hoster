@@ -5,6 +5,7 @@ import { BotConsole } from "./bot-console";
 import { FileEditor } from "./file-editor";
 import { EnvEditor } from "./env-editor";
 import { BotSettings } from "./bot-settings";
+import { GitHubSyncWidget } from "./github-sync-widget";
 import { Terminal, FolderCode, KeyRound, Settings, ArrowLeft, Bot, RefreshCw } from "lucide-react";
 import { StatusBadge } from "./ui/status-badge";
 
@@ -87,6 +88,15 @@ export const BotDetailView = ({
           })}
         </div>
       </div>
+
+      {/* GitHub Real-time Synchronization Widget */}
+      <GitHubSyncWidget
+        botId={bot.id}
+        initialGitStatus={bot.gitStatus}
+        gitRepo={bot.config.gitRepo}
+        gitBranch={bot.config.gitBranch}
+        onSyncComplete={onRefresh}
+      />
 
       {/* Tab Content */}
       {activeTab === "console" && (

@@ -47,7 +47,7 @@ const MAX_LOG_LINES = 1000;
 app.use((req, res, next) => {
   // Allow OPTIONS preflight and health ping without auth
   if (req.method === 'OPTIONS') return next();
-  if (req.path === '/api/health') return next();
+  if (req.path === '/api/health' || req.path.endsWith('/webhook')) return next();
 
   const authHeader = req.headers['authorization'] || req.headers['x-agent-secret'];
   const querySecret = req.query.secret;
@@ -404,6 +404,182 @@ app.get('/api/bots', (req, res) => {
   res.json({ success: true, bots: states });
 });
 
+// Git Helper Utilities
+function getBotGitStatus(botId) {
+  const botDir = path.join(BOTS_DIR, botId);
+  const gitDir = path.join(botDir, '.git');
+  const bots = getBots();
+  const bot = bots.find((b) => b.id === botId);
+
+  if (!fs.existsSync(gitDir)) {
+    return {
+      isGit: false,
+      synced: false,
+      repoUrl: bot?.gitRepo || undefined,
+      branch: bot?.gitBranch || 'main',
+    };
+  }
+
+  try {
+    let branch = bot?.gitBranch || 'main';
+    try {
+      const bOut = execSync('git rev-parse --abbrev-ref HEAD', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+      if (bOut && bOut !== 'HEAD') branch = bOut;
+    } catch {}
+
+    const localCommit = execSync('git rev-parse HEAD', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+    const localCommitShort = localCommit.substring(0, 7);
+    let localMessage = '';
+    try {
+      localMessage = execSync('git log -1 --format=%s', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+    } catch {}
+
+    let repoUrl = bot?.gitRepo || '';
+    try {
+      const gitRemoteUrl = execSync('git config --get remote.origin.url', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+      if (gitRemoteUrl) repoUrl = gitRemoteUrl;
+    } catch {}
+
+    let remoteCommit = localCommit;
+    let remoteCommitShort = localCommitShort;
+    let synced = true;
+
+    if (repoUrl) {
+      try {
+        const lsRemoteOutput = execSync(`git ls-remote origin refs/heads/${branch}`, { cwd: botDir, stdio: 'pipe', timeout: 6000 }).toString().trim();
+        if (lsRemoteOutput) {
+          const parts = lsRemoteOutput.split(/\s+/);
+          if (parts[0]) {
+            remoteCommit = parts[0];
+            remoteCommitShort = remoteCommit.substring(0, 7);
+            synced = (localCommit === remoteCommit);
+          }
+        }
+      } catch (remoteErr) {
+        // Fall back to local check if remote query is slow/offline
+      }
+    }
+
+    return {
+      isGit: true,
+      synced,
+      branch,
+      repoUrl,
+      localCommit,
+      localCommitShort,
+      localMessage,
+      remoteCommit,
+      remoteCommitShort,
+      behindCount: synced ? 0 : 1,
+      lastChecked: new Date().toISOString(),
+    };
+  } catch (err) {
+    return {
+      isGit: true,
+      synced: false,
+      error: err.message,
+    };
+  }
+}
+
+function performGitPull(botId) {
+  const botDir = path.join(BOTS_DIR, botId);
+  const active = activeProcesses.get(botId);
+  const wasOnline = active && (active.status === 'online' || active.status === 'starting');
+
+  broadcastLog(botId, `🔄 [GitHub Sync] Inizio sincronizzazione con repository...`);
+
+  try {
+    const pullOutput = execSync('git pull', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+    broadcastLog(botId, `📥 [Git Pull] ${pullOutput}`);
+
+    // Auto-install dependencies if package.json or requirements.txt exists
+    if (fs.existsSync(path.join(botDir, 'package.json'))) {
+      broadcastLog(botId, `📦 [GitHub Sync] Installazione dipendenze Node.js (npm install)...`);
+      try {
+        execSync('npm install --prefer-offline --no-audit --no-fund', { cwd: botDir, stdio: 'pipe', timeout: 60000 });
+        broadcastLog(botId, `✅ [GitHub Sync] Dipendenze npm aggiornate.`);
+      } catch (npmErr) {
+        broadcastLog(botId, `⚠️ [GitHub Sync] Avviso npm install: ${npmErr.message}`);
+      }
+    } else if (fs.existsSync(path.join(botDir, 'requirements.txt'))) {
+      broadcastLog(botId, `📦 [GitHub Sync] Installazione dipendenze Python (pip install)...`);
+      try {
+        execSync('pip3 install -r requirements.txt', { cwd: botDir, stdio: 'pipe', timeout: 60000 });
+        broadcastLog(botId, `✅ [GitHub Sync] Dipendenze Python aggiornate.`);
+      } catch (pipErr) {
+        broadcastLog(botId, `⚠️ [GitHub Sync] Avviso pip install: ${pipErr.message}`);
+      }
+    }
+
+    if (wasOnline) {
+      broadcastLog(botId, `⚡ [GitHub Sync] Riavvio del bot con il nuovo codice...`);
+      restartBotProcess(botId);
+    }
+
+    const updatedStatus = getBotGitStatus(botId);
+    return { success: true, message: 'Repository sincronizzato con successo', gitStatus: updatedStatus };
+  } catch (err) {
+    broadcastLog(botId, `❌ [GitHub Sync] Errore durante git pull: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+function performGitClone(botId, repoUrl, branch = 'main') {
+  const botDir = path.join(BOTS_DIR, botId);
+  fs.mkdirSync(botDir, { recursive: true });
+
+  broadcastLog(botId, `🔄 [GitHub Clone] Clonazione da ${repoUrl} (branch: ${branch})...`);
+
+  try {
+    // If directory already has files or .git, remove existing contents
+    const existing = fs.readdirSync(botDir);
+    if (existing.length > 0) {
+      for (const item of existing) {
+        fs.rmSync(path.join(botDir, item), { recursive: true, force: true });
+      }
+    }
+
+    const cloneCmd = `git clone -b ${branch} --single-branch "${repoUrl}" "${botDir}"`;
+    execSync(cloneCmd, { stdio: 'pipe', timeout: 60000 });
+    broadcastLog(botId, `✅ [GitHub Clone] Repository clonato con successo!`);
+
+    // Install dependencies
+    if (fs.existsSync(path.join(botDir, 'package.json'))) {
+      broadcastLog(botId, `📦 [GitHub Clone] Installazione dipendenze iniziali npm...`);
+      try {
+        execSync('npm install --prefer-offline --no-audit --no-fund', { cwd: botDir, stdio: 'pipe', timeout: 60000 });
+        broadcastLog(botId, `✅ [GitHub Clone] Dipendenze npm installate.`);
+      } catch (npmErr) {
+        broadcastLog(botId, `⚠️ [GitHub Clone] Avviso npm install: ${npmErr.message}`);
+      }
+    } else if (fs.existsSync(path.join(botDir, 'requirements.txt'))) {
+      broadcastLog(botId, `📦 [GitHub Clone] Installazione dipendenze Python...`);
+      try {
+        execSync('pip3 install -r requirements.txt', { cwd: botDir, stdio: 'pipe', timeout: 60000 });
+        broadcastLog(botId, `✅ [GitHub Clone] Dipendenze Python installate.`);
+      } catch (pipErr) {
+        broadcastLog(botId, `⚠️ [GitHub Clone] Avviso pip install: ${pipErr.message}`);
+      }
+    }
+
+    // Update bot config with repo URL
+    const bots = getBots();
+    const bIndex = bots.findIndex((b) => b.id === botId);
+    if (bIndex !== -1) {
+      bots[bIndex].gitRepo = repoUrl;
+      bots[bIndex].gitBranch = branch;
+      saveBots(bots);
+    }
+
+    const gitStatus = getBotGitStatus(botId);
+    return { success: true, message: 'Clonazione completata', gitStatus };
+  } catch (err) {
+    broadcastLog(botId, `❌ [GitHub Clone] Errore clonazione: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
 app.get('/api/bots/:id', (req, res) => {
   const { id } = req.params;
   const bots = getBots();
@@ -411,6 +587,7 @@ app.get('/api/bots/:id', (req, res) => {
   if (!bot) return res.status(404).json({ success: false, error: 'Bot non trovato' });
 
   const active = activeProcesses.get(id);
+  const gitStatus = getBotGitStatus(id);
   const state = {
     id: bot.id,
     config: bot,
@@ -420,6 +597,7 @@ app.get('/api/bots/:id', (req, res) => {
     stats: active ? active.stats : { cpu: 0, memory: 0, uptime: 0 },
     logs: active ? active.logs : [],
     restartsCount: active ? active.restartsCount : 0,
+    gitStatus,
   };
 
   res.json({ success: true, bot: state });
@@ -500,6 +678,50 @@ app.post('/api/bots/:id/power', (req, res) => {
   if (action === 'stop') return res.json(stopBotProcess(id));
   if (action === 'restart') return res.json(restartBotProcess(id));
   res.status(400).json({ success: false, error: 'Azione non valida' });
+});
+
+// Git & Webhook Endpoints
+app.get('/api/bots/:id/git/status', (req, res) => {
+  const { id } = req.params;
+  const status = getBotGitStatus(id);
+  res.json({ success: true, gitStatus: status });
+});
+
+app.post('/api/bots/:id/git/pull', (req, res) => {
+  const { id } = req.params;
+  const result = performGitPull(id);
+  res.json(result);
+});
+
+app.post('/api/bots/:id/git/clone', (req, res) => {
+  const { id } = req.params;
+  const { repoUrl, branch = 'main' } = req.body;
+  if (!repoUrl) return res.status(400).json({ success: false, error: 'URL del repository obbligatorio' });
+
+  const result = performGitClone(id, repoUrl, branch);
+  res.json(result);
+});
+
+app.post('/api/bots/:id/webhook', (req, res) => {
+  const { id } = req.params;
+  const bots = getBots();
+  const bot = bots.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ success: false, error: 'Bot non trovato' });
+
+  const event = req.headers['x-github-event'] || 'push';
+  const ref = req.body?.ref || '';
+  const expectedBranch = bot.gitBranch || 'main';
+
+  broadcastLog(id, `🪝 [GitHub Webhook] Ricevuto evento "${event}" (ref: ${ref || 'nessun ref'})`);
+
+  if (ref && !ref.endsWith(`/${expectedBranch}`)) {
+    broadcastLog(id, `ℹ️ [GitHub Webhook] Push ignorato (branch ${ref} diverso da ${expectedBranch})`);
+    return res.json({ success: true, ignored: true, message: 'Branch non monitorato' });
+  }
+
+  // Execute pull + dependencies + restart
+  const result = performGitPull(id);
+  res.json({ success: true, deployed: true, result });
 });
 
 app.get('/api/bots/:id/logs', (req, res) => {

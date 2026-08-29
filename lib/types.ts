@@ -27,8 +27,27 @@ export interface BotConfig {
   autoRestart: boolean;
   maxRestarts: number;
   restartDelay: number; // ms
+  gitRepo?: string; // e.g. "https://github.com/user/repo"
+  gitBranch?: string; // e.g. "main"
+  autoDeployWebhook?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GitSyncStatus {
+  isGit: boolean;
+  synced: boolean;
+  branch?: string;
+  repoUrl?: string;
+  localCommit?: string;
+  localCommitShort?: string;
+  localMessage?: string;
+  remoteCommit?: string;
+  remoteCommitShort?: string;
+  remoteMessage?: string;
+  behindCount?: number;
+  lastChecked?: string;
+  error?: string;
 }
 
 export interface BotState {
@@ -38,6 +57,7 @@ export interface BotState {
   stats: BotStats;
   logs: string[];
   restartsCount: number;
+  gitStatus?: GitSyncStatus;
   lastStarted?: string;
   lastStopped?: string;
   error?: string;

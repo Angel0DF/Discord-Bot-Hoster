@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { BotState, BotRuntime } from "@/lib/types";
 import { GlowingCard } from "./ui/glowing-card";
-import { Settings, Save, Trash2, Check, AlertTriangle } from "lucide-react";
+import { Settings, Save, Trash2, Check, AlertTriangle, GitBranch, GitPullRequest, Webhook, RefreshCw, Copy } from "lucide-react";
 
 import { ApiClient } from "@/lib/api-client";
 
@@ -18,10 +18,14 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
   const [runtime, setRuntime] = useState<BotRuntime>(bot.config.runtime);
   const [mainFile, setMainFile] = useState(bot.config.mainFile);
   const [startCommand, setStartCommand] = useState(bot.config.startCommand || "");
+  const [gitRepo, setGitRepo] = useState(bot.config.gitRepo || "");
+  const [gitBranch, setGitBranch] = useState(bot.config.gitBranch || "main");
   const [autoRestart, setAutoRestart] = useState(bot.config.autoRestart);
   const [maxRestarts, setMaxRestarts] = useState(bot.config.maxRestarts || 5);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneMsg, setCloneMsg] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -35,6 +39,8 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
         runtime,
         mainFile,
         startCommand: startCommand.trim() || undefined,
+        gitRepo: gitRepo.trim() || undefined,
+        gitBranch: gitBranch.trim() || "main",
         autoRestart,
         maxRestarts: Number(maxRestarts),
       });
@@ -48,6 +54,29 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
       console.error("Failed to save settings:", err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCloneRepo = async () => {
+    if (!gitRepo.trim()) return;
+    setIsCloning(true);
+    setCloneMsg(null);
+    try {
+      const res = await ApiClient.cloneGit(bot.id, {
+        repoUrl: gitRepo.trim(),
+        branch: gitBranch.trim() || "main",
+      });
+      if (res.success) {
+        setCloneMsg("Repository clonato con successo!");
+        onUpdate({ ...bot.config, gitRepo, gitBranch });
+      } else {
+        setCloneMsg(res.error || "Errore durante la clonazione");
+      }
+    } catch (err: any) {
+      setCloneMsg(err.message || "Errore di connessione");
+    } finally {
+      setIsCloning(false);
+      setTimeout(() => setCloneMsg(null), 5000);
     }
   };
 
@@ -196,6 +225,78 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
             </button>
           </div>
         </form>
+      </GlowingCard>
+
+      {/* GitHub Repository & Webhook Settings */}
+      <GlowingCard glowColor="purple" className="p-6">
+        <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-4 mb-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+            <GitBranch className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Repository GitHub & Sincronizzazione</h3>
+            <p className="text-xs text-zinc-400">
+              Collega il repository del tuo bot per aggiornamenti in tempo reale e deploy automatico tramite Webhook.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                GitHub Repository URL
+              </label>
+              <input
+                type="text"
+                value={gitRepo}
+                onChange={(e) => setGitRepo(e.target.value)}
+                placeholder="https://github.com/username/discord-bot"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-purple-500"
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Per repository privati usa il formato: <code>https://TOKEN@github.com/user/repo</code>
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                Branch Principale
+              </label>
+              <input
+                type="text"
+                value={gitBranch}
+                onChange={(e) => setGitBranch(e.target.value)}
+                placeholder="main"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-purple-500"
+              />
+            </div>
+          </div>
+
+          {cloneMsg && (
+            <div className="rounded-xl border border-purple-500/30 bg-purple-950/40 p-3 text-xs text-purple-300">
+              {cloneMsg}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-[11px] text-zinc-400">
+              Usa <b>"Clona / Risincronizza Repository"</b> per scaricare tutti i file da GitHub nella cartella del bot.
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCloneRepo}
+                disabled={isCloning || !gitRepo.trim()}
+                className="flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+              >
+                <GitPullRequest className={`h-4 w-4 ${isCloning ? "animate-spin" : ""}`} />
+                {isCloning ? "Clonazione in corso..." : "Clona da GitHub"}
+              </button>
+            </div>
+          </div>
+        </div>
       </GlowingCard>
 
       {/* Danger Zone */}

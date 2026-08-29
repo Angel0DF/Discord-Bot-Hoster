@@ -22,6 +22,8 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
   const [botName, setBotName] = useState("");
   const [botDescription, setBotDescription] = useState("");
   const [discordToken, setDiscordToken] = useState("");
+  const [gitRepoUrl, setGitRepoUrl] = useState("");
+  const [gitBranch, setGitBranch] = useState("main");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -183,20 +185,34 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
 
       const data = await ApiClient.createBot({
         name: botName.trim(),
-        description: botDescription.trim() || selectedTemplate.description,
+        description: botDescription.trim() || (gitRepoUrl ? `Clonato da ${gitRepoUrl}` : selectedTemplate.description),
         templateId: selectedTemplate.id,
-        templateFiles: finalFiles,
+        templateFiles: gitRepoUrl ? [] : finalFiles,
         runtime,
         mainFile,
+        gitRepo: gitRepoUrl.trim() || undefined,
+        gitBranch: gitBranch.trim() || "main",
         env,
       });
 
-      if (data.success) {
+      if (data.success && data.bot) {
+        if (gitRepoUrl.trim()) {
+          try {
+            await ApiClient.cloneGit(data.bot.id, {
+              repoUrl: gitRepoUrl.trim(),
+              branch: gitBranch.trim() || "main",
+            });
+          } catch (cloneErr) {
+            console.error("Git clone on creation warning:", cloneErr);
+          }
+        }
+
         onBotCreated(data.bot);
         onClose();
         setBotName("");
         setBotDescription("");
         setDiscordToken("");
+        setGitRepoUrl("");
         setUploadedFiles([]);
       } else {
         setError(data.error || "Errore durante la creazione del bot");
@@ -335,6 +351,36 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
 
           {/* Bot details */}
           <div className="space-y-4">
+            {/* GitHub Repo option */}
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-purple-300">Oppure Clona da Repository GitHub</span>
+                <span className="text-[10px] text-zinc-400">Opzionale</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  value={gitRepoUrl}
+                  onChange={(e) => {
+                    setGitRepoUrl(e.target.value);
+                    if (!botName && e.target.value.includes("/")) {
+                      const parts = e.target.value.replace(/\/$/, "").split("/");
+                      setBotName(parts[parts.length - 1].replace(".git", ""));
+                    }
+                  }}
+                  placeholder="https://github.com/user/bot-repo"
+                  className="sm:col-span-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 outline-none focus:border-purple-500"
+                />
+                <input
+                  type="text"
+                  value={gitBranch}
+                  onChange={(e) => setGitBranch(e.target.value)}
+                  placeholder="Branch: main"
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1">
                 2. Nome del Bot <span className="text-rose-400">*</span>
