@@ -67,7 +67,12 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
 
         {/* Description if any */}
         {bot.config.description && (
-          <p className="mt-3 text-xs text-zinc-400 line-clamp-2">{bot.config.description}</p>
+          <p className="mt-3 text-xs text-zinc-400 line-clamp-2">
+            {bot.config.description
+              .replace(/https?:\/\/[^@]+@github\.com\/([^\s]+)/g, "$1")
+              .replace(/https?:\/\/github\.com\/([^\s]+)/g, "$1")
+              .replace(/\.git/g, "")}
+          </p>
         )}
 
         {/* Real-time stats pills */}

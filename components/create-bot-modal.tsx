@@ -187,9 +187,17 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
         mainFile = uploadedFiles.find((f) => f.name.endsWith("index.js") || f.name.endsWith("bot.js") || f.name.endsWith("main.js"))?.name || "index.js";
       }
 
+      let cleanRepoDisplay = "";
+      if (gitRepoUrl) {
+        cleanRepoDisplay = gitRepoUrl
+          .replace(/^https?:\/\/[^@]+@github\.com\//, "")
+          .replace(/^https?:\/\/github\.com\//, "")
+          .replace(/\.git$/, "");
+      }
+
       const data = await ApiClient.createBot({
         name: botName.trim(),
-        description: botDescription.trim() || (gitRepoUrl ? `Clonato da ${gitRepoUrl}` : selectedTemplate.description),
+        description: botDescription.trim() || (cleanRepoDisplay ? `Repository: ${cleanRepoDisplay}` : selectedTemplate.description),
         templateId: selectedTemplate.id,
         templateFiles: gitRepoUrl ? [] : finalFiles,
         runtime,
