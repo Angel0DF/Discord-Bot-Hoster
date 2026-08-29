@@ -43,8 +43,9 @@ export const BotDetailView = ({
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-4 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={onBack}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-white transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-white transition-colors cursor-pointer"
             title="Torna alla Dashboard"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -74,8 +75,9 @@ export const BotDetailView = ({
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                   isActive
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"

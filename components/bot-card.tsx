@@ -29,7 +29,11 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
   const glowColor = isOnline ? "emerald" : bot.status === "error" ? "rose" : "indigo";
 
   return (
-    <GlowingCard glowColor={glowColor} className="flex flex-col justify-between p-5 transition-all">
+    <GlowingCard
+      glowColor={glowColor}
+      className="flex flex-col justify-between p-5 transition-all cursor-pointer hover:border-indigo-500/50 group"
+      onClick={() => onSelect(bot)}
+    >
       <div>
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -44,7 +48,7 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
               <BotIcon className="h-6 w-6" />
             </div>
             <div>
-              <h3 className="font-bold text-white tracking-tight text-base hover:text-indigo-400 transition-colors">
+              <h3 className="font-bold text-white tracking-tight text-base group-hover:text-indigo-400 transition-colors">
                 {bot.config.name}
               </h3>
               <div className="flex items-center gap-2 mt-0.5">
@@ -103,12 +107,15 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
       {/* Footer Controls */}
       <div className="mt-5 flex items-center justify-between border-t border-zinc-800/80 pt-3">
         {/* Power Action Buttons */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           {isOnline ? (
             <>
               <button
                 type="button"
-                onClick={() => onPowerAction(bot.id, "stop")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPowerAction(bot.id, "stop");
+                }}
                 disabled={isActionLoading}
                 className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
                 title="Arresta Bot"
@@ -118,7 +125,10 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
               </button>
               <button
                 type="button"
-                onClick={() => onPowerAction(bot.id, "restart")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPowerAction(bot.id, "restart");
+                }}
                 disabled={isActionLoading}
                 className="flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
                 title="Riavvia Bot"
@@ -130,7 +140,10 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
           ) : (
             <button
               type="button"
-              onClick={() => onPowerAction(bot.id, "start")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPowerAction(bot.id, "start");
+              }}
               disabled={isActionLoading || bot.status === "starting"}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
             >
@@ -143,8 +156,11 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
         {/* Open Bot Panel Button */}
         <button
           type="button"
-          onClick={() => onSelect(bot)}
-          className="flex items-center gap-1.5 rounded-lg bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-all hover:bg-indigo-600 hover:text-white group"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(bot);
+          }}
+          className="flex items-center gap-1.5 rounded-lg bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-all hover:bg-indigo-600 hover:text-white"
         >
           <Terminal className="h-3.5 w-3.5 text-indigo-400 group-hover:text-white" />
           <span>Gestisci</span>

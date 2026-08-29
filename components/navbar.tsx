@@ -48,8 +48,9 @@ export const Navbar = ({
           {/* Proxmox Connection Button */}
           {onOpenConnectionModal && (
             <button
+              type="button"
               onClick={onOpenConnectionModal}
-              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                 isConnected
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
                   : "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
@@ -70,15 +71,16 @@ export const Navbar = ({
 
           {onRefresh && (
             <button
+              type="button"
               onClick={onRefresh}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-white cursor-pointer"
               title="Aggiorna stato"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-indigo-400" : ""}`} />
             </button>
           )}
 
-          <ShimmerButton onClick={onOpenCreateModal} className="h-9 px-3.5 text-xs sm:text-sm">
+          <ShimmerButton type="button" onClick={onOpenCreateModal} className="h-9 px-3.5 text-xs sm:text-sm cursor-pointer">
             <Plus className="h-4 w-4 mr-1.5 text-indigo-300" />
             Nuovo Bot
           </ShimmerButton>

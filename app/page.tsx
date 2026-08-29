@@ -163,8 +163,9 @@ export default function Home() {
             <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setActiveMainTab("bots")}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
                     activeMainTab === "bots"
                       ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
@@ -174,8 +175,9 @@ export default function Home() {
                   I Tuoi Bot ({bots.length})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveMainTab("proxmox")}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
                     activeMainTab === "proxmox"
                       ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
@@ -189,15 +191,17 @@ export default function Home() {
               {activeMainTab === "bots" && (
                 <div className="flex items-center gap-3">
                   <button
+                    type="button"
                     onClick={() => setIsConnectionModalOpen(true)}
-                    className="text-xs text-zinc-400 hover:text-indigo-300 transition-colors hidden sm:block"
+                    className="text-xs text-zinc-400 hover:text-indigo-300 transition-colors hidden sm:block cursor-pointer"
                   >
                     ⚙️ Impostazioni Server Proxmox
                   </button>
                   {bots.length > 0 && (
                     <button
+                      type="button"
                       onClick={() => setIsCreateModalOpen(true)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-400 hover:text-indigo-300"
+                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-400 hover:text-indigo-300 cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Aggiungi Bot
