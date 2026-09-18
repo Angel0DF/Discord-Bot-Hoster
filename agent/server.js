@@ -504,8 +504,28 @@ function performGitPull(botId) {
   broadcastLog(botId, `🔄 [GitHub Sync] Inizio sincronizzazione con repository...`);
 
   try {
-    const pullOutput = execSync('git pull', { cwd: botDir, stdio: 'pipe' }).toString().trim();
-    broadcastLog(botId, `📥 [Git Pull] ${pullOutput}`);
+    const bots = getBots();
+    const botConfig = bots.find((b) => b.id === botId);
+    const branch = botConfig?.gitBranch || 'main';
+
+    // Step 1: Discard local modifications to tracked files (like package-lock.json modified by npm install)
+    try {
+      execSync('git reset --hard HEAD', { cwd: botDir, stdio: 'pipe', timeout: 15000 });
+    } catch {}
+
+    // Step 2: Fetch latest updates from remote origin
+    execSync(`git fetch origin ${branch}`, { cwd: botDir, stdio: 'pipe', timeout: 30000 });
+
+    // Step 3: Hard reset to remote branch to guarantee clean sync without merge conflicts
+    execSync(`git reset --hard origin/${branch}`, { cwd: botDir, stdio: 'pipe', timeout: 30000 });
+
+    let pullOutput = '';
+    try {
+      pullOutput = execSync('git log -1 --format="%h - %s"', { cwd: botDir, stdio: 'pipe' }).toString().trim();
+    } catch {
+      pullOutput = 'Sincronizzato con successo';
+    }
+    broadcastLog(botId, `📥 [Git Pull] Aggiornato al commit: ${pullOutput}`);
 
     // Auto-install dependencies if package.json or requirements.txt exists
     if (fs.existsSync(path.join(botDir, 'package.json'))) {
