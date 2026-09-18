@@ -76,7 +76,7 @@ export const ConnectionModal = ({ isOpen, onClose, onConnectionChanged }: Connec
         <div className="mt-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 text-xs text-indigo-200 flex items-start gap-2.5">
           <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-white">Come connettere da Netlify al tuo Proxmox:</p>
+            <p className="font-semibold text-white">Come connettere la Dashboard al tuo Proxmox:</p>
             <p className="mt-1 text-zinc-300 text-[11px] leading-relaxed">
               Esegui lo script <code>install-agent.sh</code> nel tuo container LXC Proxmox, poi inserisci l'indirizzo HTTP dell'agent (oppure il tuo URL <strong>Cloudflare Tunnel</strong> gratuito) e la Secret Key impostata.
             </p>

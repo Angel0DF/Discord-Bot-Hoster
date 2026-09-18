@@ -546,8 +546,6 @@ function performGitPull(botId) {
       }
     }
 
-    const bots = getBots();
-    const botConfig = bots.find((b) => b.id === botId);
     const shouldRestart = wasOnline || (botConfig && botConfig.enabled !== false && botConfig.autoRestart !== false);
 
     if (shouldRestart) {

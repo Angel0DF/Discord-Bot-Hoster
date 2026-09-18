@@ -31,7 +31,7 @@ dpkg -i cloudflared.deb
 cloudflared tunnel --url http://localhost:4000
 
 # Copia l'URL generato (es. https://xyz.trycloudflare.com) 
-# e inseriscilo nella dashboard Netlify!
+# e inseriscilo nella tua Dashboard!
 `;
 
   return (
