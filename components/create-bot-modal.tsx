@@ -182,9 +182,15 @@ export const CreateBotModal = ({ isOpen, onClose, onBotCreated }: CreateBotModal
       if (uploadedFiles.some((f) => f.name.endsWith(".py") || f.name.includes("main.py"))) {
         runtime = "python";
         mainFile = uploadedFiles.find((f) => f.name.endsWith("main.py") || f.name.endsWith("bot.py"))?.name || "main.py";
+      } else if (uploadedFiles.some((f) => f.name.endsWith(".jar") || f.name.toLowerCase().includes("lavalink"))) {
+        runtime = "java";
+        mainFile = uploadedFiles.find((f) => f.name.endsWith(".jar"))?.name || "Lavalink.jar";
       } else if (uploadedFiles.some((f) => f.name.endsWith(".js") || f.name.endsWith(".ts"))) {
         runtime = "nodejs";
         mainFile = uploadedFiles.find((f) => f.name.endsWith("index.js") || f.name.endsWith("bot.js") || f.name.endsWith("main.js"))?.name || "index.js";
+      } else if (botName.toLowerCase().includes("lavalink") || gitRepoUrl.toLowerCase().includes("lavalink")) {
+        runtime = "java";
+        mainFile = "Lavalink.jar";
       }
 
       let cleanRepoDisplay = "";

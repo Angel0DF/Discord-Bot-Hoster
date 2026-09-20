@@ -146,6 +146,10 @@ function resolveCommand(config: BotConfig, botDir: string): { command: string; a
     return { command: 'bun', args: ['run', config.mainFile || 'index.js'] };
   }
 
+  if (config.runtime === 'java') {
+    return { command: 'java', args: ['-jar', config.mainFile || 'Lavalink.jar'] };
+  }
+
   // Default to Node.js
   return { command: 'node', args: [config.mainFile || 'index.js'] };
 }

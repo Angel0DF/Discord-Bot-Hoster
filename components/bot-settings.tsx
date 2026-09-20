@@ -119,11 +119,22 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
               </label>
               <select
                 value={runtime}
-                onChange={(e) => setRuntime(e.target.value as BotRuntime)}
+                onChange={(e) => {
+                  const newRuntime = e.target.value as BotRuntime;
+                  setRuntime(newRuntime);
+                  if (newRuntime === "java" && (mainFile === "index.js" || mainFile === "main.py")) {
+                    setMainFile("Lavalink.jar");
+                  } else if (newRuntime === "python" && (mainFile === "index.js" || mainFile === "Lavalink.jar")) {
+                    setMainFile("main.py");
+                  } else if (newRuntime === "nodejs" && (mainFile === "main.py" || mainFile === "Lavalink.jar")) {
+                    setMainFile("index.js");
+                  }
+                }}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs text-white outline-none focus:border-indigo-500"
               >
                 <option value="nodejs">Node.js (node / npm)</option>
                 <option value="python">Python 3 (python / venv)</option>
+                <option value="java">Java (java -jar / Lavalink)</option>
                 <option value="bun">Bun (bun run)</option>
                 <option value="custom">Personalizzato</option>
               </select>
@@ -152,7 +163,7 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
                 required
                 value={mainFile}
                 onChange={(e) => setMainFile(e.target.value)}
-                placeholder="index.js oppure main.py"
+                placeholder="index.js, main.py o Lavalink.jar"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-indigo-500"
               />
             </div>
@@ -165,7 +176,7 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
                 type="text"
                 value={startCommand}
                 onChange={(e) => setStartCommand(e.target.value)}
-                placeholder="es. node --max-old-space-size=512 index.js"
+                placeholder="es. java -jar Lavalink.jar oppure node index.js"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-indigo-500"
               />
             </div>

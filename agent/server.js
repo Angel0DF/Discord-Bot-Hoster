@@ -110,6 +110,10 @@ function resolveCommand(config, botDir) {
     return { command: 'bun', args: ['run', config.mainFile || 'index.js'] };
   }
 
+  if (config.runtime === 'java') {
+    return { command: 'java', args: ['-jar', config.mainFile || 'Lavalink.jar'] };
+  }
+
   return { command: 'node', args: [config.mainFile || 'index.js'] };
 }
 

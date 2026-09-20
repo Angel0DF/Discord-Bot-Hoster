@@ -6,7 +6,7 @@ export interface TemplateFile {
 export interface BotTemplate {
   id: string;
   name: string;
-  runtime: 'nodejs' | 'python' | 'bun';
+  runtime: 'nodejs' | 'python' | 'bun' | 'java';
   description: string;
   mainFile: string;
   defaultEnv: Record<string, string>;
@@ -211,6 +211,46 @@ PREFIX=!
         name: "index.js",
         content: `console.log("🚀 Bot personalizzato avviato!");
 // Inserisci il tuo codice qui
+`
+      }
+    ]
+  },
+  {
+    id: "lavalink-v4",
+    name: "Lavalink v4 (Server Audio Java)",
+    runtime: "java",
+    description: "Server audio autonomo per bot Discord basato su Java (Lavalink.jar + application.yml).",
+    mainFile: "Lavalink.jar",
+    defaultEnv: {},
+    files: [
+      {
+        name: "application.yml",
+        content: `server:
+  port: 2333
+  address: 0.0.0.0
+lavalink:
+  plugins: []
+  server:
+    password: "youshallnotpass"
+    playerUpdateInterval: 5
+    koe:
+      useEpoll: true
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: HIGH
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    youtubePlaylistLoadLimit: 6
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
+    gc-warnings: true
+logging:
+  file:
+    path: ./logs/lavalink.log
+  level:
+    root: INFO
+    lavalink: INFO
 `
       }
     ]

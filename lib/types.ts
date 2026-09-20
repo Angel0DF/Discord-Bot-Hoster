@@ -1,4 +1,4 @@
-export type BotRuntime = 'nodejs' | 'python' | 'bun' | 'custom';
+export type BotRuntime = 'nodejs' | 'python' | 'bun' | 'java' | 'custom';
 
 export type BotStatus = 'online' | 'offline' | 'starting' | 'stopping' | 'error';
 
