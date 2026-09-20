@@ -3,10 +3,9 @@ import React, { useState } from "react";
 import { BotState } from "@/lib/types";
 import { BotConsole } from "./bot-console";
 import { FileEditor } from "./file-editor";
-import { EnvEditor } from "./env-editor";
 import { BotSettings } from "./bot-settings";
 import { GitHubSyncWidget } from "./github-sync-widget";
-import { Terminal, FolderCode, KeyRound, Settings, ArrowLeft, Bot, RefreshCw } from "lucide-react";
+import { Terminal, FolderCode, Settings, ArrowLeft, Bot, RefreshCw } from "lucide-react";
 import { StatusBadge } from "./ui/status-badge";
 
 interface BotDetailViewProps {
@@ -28,12 +27,11 @@ export const BotDetailView = ({
   onBotDeleted,
   isActionLoading,
 }: BotDetailViewProps) => {
-  const [activeTab, setActiveTab] = useState<"console" | "files" | "env" | "settings">("console");
+  const [activeTab, setActiveTab] = useState<"console" | "files" | "settings">("console");
 
   const tabs = [
     { id: "console", label: "Console & Logs", icon: Terminal },
     { id: "files", label: "File & Editor", icon: FolderCode },
-    { id: "env", label: "Variabili & Token", icon: KeyRound },
     { id: "settings", label: "Impostazioni", icon: Settings },
   ] as const;
 
@@ -110,14 +108,6 @@ export const BotDetailView = ({
       )}
 
       {activeTab === "files" && <FileEditor botId={bot.id} botName={bot.config.name} />}
-
-      {activeTab === "env" && (
-        <EnvEditor
-          botId={bot.id}
-          initialEnv={bot.config.env}
-          onSaveSuccess={onRefresh}
-        />
-      )}
 
       {activeTab === "settings" && (
         <BotSettings
