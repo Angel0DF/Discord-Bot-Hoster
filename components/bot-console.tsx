@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { BotState } from "@/lib/types";
-import { Terminal, Send, Trash2, Download, Play, Square, RotateCw } from "lucide-react";
+import { Terminal, Send, Trash2, Download, Play, Square, RotateCw, ArrowDown, ArrowDownToLine } from "lucide-react";
 import { StatusBadge } from "./ui/status-badge";
 
 import { ApiClient } from "@/lib/api-client";
@@ -89,12 +89,20 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
     };
   }, [bot.id]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom only if user hasn't scrolled up
   useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (autoScroll && terminalContainerRef.current) {
+      terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
     }
   }, [logs, autoScroll]);
+
+  const handleScroll = () => {
+    if (!terminalContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = terminalContainerRef.current;
+    // If distance to bottom is within 60px, keep autoScroll on, otherwise pause it
+    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 60;
+    setAutoScroll(isAtBottom);
+  };
 
   const handleSendCommand = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,6 +189,27 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
 
           <div className="h-4 w-px bg-zinc-800 mx-1" />
 
+          {/* Auto-scroll toggle button */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !autoScroll;
+              setAutoScroll(next);
+              if (next && terminalContainerRef.current) {
+                terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
+              }
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-colors border cursor-pointer ${
+              autoScroll
+                ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-600/30"
+                : "bg-zinc-800/60 text-zinc-400 border-zinc-700/60 hover:text-zinc-200 hover:bg-zinc-800"
+            }`}
+            title="Attiva o disattiva lo scorrimento automatico verso il basso"
+          >
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+            <span>Auto-scroll: {autoScroll ? "ON" : "OFF"}</span>
+          </button>
+
           <button
             onClick={handleClearLogs}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
@@ -198,40 +227,60 @@ export const BotConsole = ({ bot, onPowerAction, isActionLoading }: BotConsolePr
         </div>
       </div>
 
-      {/* Terminal View */}
-      <div
-        ref={terminalContainerRef}
-        className="flex-1 overflow-y-auto p-4 font-mono text-xs text-zinc-300 bg-black/40 space-y-1 select-text selection:bg-indigo-500/40"
-      >
-        {logs.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600">
-            <Terminal className="h-8 w-8 mb-2 opacity-30" />
-            <p>Nessun log disponibile.</p>
-            <p className="text-[11px] text-zinc-500">Avvia il bot per visualizzare l'output in tempo reale.</p>
-          </div>
-        ) : (
-          logs.map((log, index) => {
-            let textColor = "text-zinc-300";
-            if (log.includes("❌") || log.includes("Error") || log.includes("Exception") || log.includes("Traceback")) {
-              textColor = "text-rose-400";
-            } else if (log.includes("⚠️") || log.includes("Warn")) {
-              textColor = "text-amber-400";
-            } else if (log.includes("🟢") || log.includes("pronto") || log.includes("Logged in as") || log.includes("success")) {
-              textColor = "text-emerald-400";
-            } else if (log.includes("🔄") || log.includes("⚡")) {
-              textColor = "text-cyan-400";
-            } else if (log.startsWith("⌨️ >")) {
-              textColor = "text-purple-400 font-bold";
-            }
+      {/* Terminal View Container with Floating Return-to-Bottom Button */}
+      <div className="relative flex-1 flex flex-col min-h-0">
+        <div
+          ref={terminalContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-4 font-mono text-xs text-zinc-300 bg-black/40 space-y-1 select-text selection:bg-indigo-500/40"
+        >
+          {logs.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center text-zinc-600">
+              <Terminal className="h-8 w-8 mb-2 opacity-30" />
+              <p>Nessun log disponibile.</p>
+              <p className="text-[11px] text-zinc-500">Avvia il bot per visualizzare l'output in tempo reale.</p>
+            </div>
+          ) : (
+            logs.map((log, index) => {
+              let textColor = "text-zinc-300";
+              if (log.includes("❌") || log.includes("Error") || log.includes("Exception") || log.includes("Traceback")) {
+                textColor = "text-rose-400";
+              } else if (log.includes("⚠️") || log.includes("Warn")) {
+                textColor = "text-amber-400";
+              } else if (log.includes("🟢") || log.includes("pronto") || log.includes("Logged in as") || log.includes("success")) {
+                textColor = "text-emerald-400";
+              } else if (log.includes("🔄") || log.includes("⚡")) {
+                textColor = "text-cyan-400";
+              } else if (log.startsWith("⌨️ >")) {
+                textColor = "text-purple-400 font-bold";
+              }
 
-            return (
-              <div key={index} className={`leading-relaxed break-all font-mono ${textColor}`}>
-                {log}
-              </div>
-            );
-          })
+              return (
+                <div key={index} className={`leading-relaxed break-all font-mono ${textColor}`}>
+                  {log}
+                </div>
+              );
+            })
+          )}
+          <div ref={logsEndRef} />
+        </div>
+
+        {/* Floating return-to-bottom button when scrolled up */}
+        {!autoScroll && (
+          <button
+            type="button"
+            onClick={() => {
+              setAutoScroll(true);
+              if (terminalContainerRef.current) {
+                terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
+              }
+            }}
+            className="absolute bottom-4 right-6 z-20 flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xl shadow-indigo-950/80 hover:bg-indigo-500 transition-all cursor-pointer border border-indigo-400/30"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+            <span>Torna all'ultimo log</span>
+          </button>
         )}
-        <div ref={logsEndRef} />
       </div>
 
       {/* Terminal Footer & Input */}
