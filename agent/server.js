@@ -286,21 +286,6 @@ function startBotProcess(botId) {
 
 function stopBotProcess(botId) {
   const active = activeProcesses.get(botId);
-  if (!active || !active.process || active.status === 'offline') {
-    const allBots = getBots();
-    const bIndex = allBots.findIndex((b) => b.id === botId);
-    if (bIndex !== -1) {
-      allBots[bIndex].enabled = false;
-      saveBots(allBots);
-    }
-    return { success: true, message: 'Bot già offline' };
-  }
-
-  active.manuallyStopped = true;
-  active.status = 'stopped_by_user';
-  if (active.restartTimeout) clearTimeout(active.restartTimeout);
-  if (active.statsInterval) clearInterval(active.statsInterval);
-
   const allBots = getBots();
   const bIndex = allBots.findIndex((b) => b.id === botId);
   if (bIndex !== -1) {
@@ -308,23 +293,38 @@ function stopBotProcess(botId) {
     saveBots(allBots);
   }
 
+  if (!active || !active.process || active.status === 'offline') {
+    if (active) {
+      active.status = 'offline';
+      active.process = null;
+      active.manuallyStopped = true;
+    }
+    return { success: true, message: 'Bot già offline' };
+  }
+
+  active.manuallyStopped = true;
+  active.status = 'offline';
+  if (active.restartTimeout) clearTimeout(active.restartTimeout);
+  if (active.statsInterval) clearInterval(active.statsInterval);
+
   broadcastLog(botId, `🛑 [Proxmox Agent] Arresto manuale del bot...`);
   const pid = active.process.pid;
 
   if (pid) {
     if (process.platform === 'win32') {
-      exec(`taskkill /pid ${pid} /T /F`, () => {});
+      try { execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' }); } catch {}
     } else {
-      try {
-        active.process.kill('SIGKILL');
-      } catch {
-        active.process.kill('SIGTERM');
-      }
+      try { process.kill(-pid, 'SIGKILL'); } catch {}
+      try { process.kill(pid, 'SIGKILL'); } catch {}
+      try { active.process.kill('SIGKILL'); } catch {}
+      try { execSync(`kill -9 ${pid} 2>/dev/null`, { stdio: 'ignore' }); } catch {}
     }
   }
 
+  active.process = null;
   active.status = 'offline';
   active.stats = { cpu: 0, memory: 0, uptime: 0 };
+  broadcastLog(botId, `⚪ [Proxmox Agent] Bot arrestato con successo.`);
   return { success: true, message: 'Bot arrestato' };
 }
 
@@ -404,7 +404,11 @@ app.get('/api/bots', (req, res) => {
     const active = activeProcesses.get(config.id);
     let status = 'offline';
     if (active) {
-      if (active.process && active.process.pid && !active.process.killed) {
+      if (active.manuallyStopped || active.status === 'offline' || active.status === 'stopped_by_user') {
+        status = 'offline';
+      } else if (active.status === 'restarting') {
+        status = 'starting';
+      } else if (active.process && active.process.pid && !active.process.killed) {
         status = 'online';
       } else {
         status = active.status;
@@ -632,7 +636,11 @@ app.get('/api/bots/:id', (req, res) => {
   const gitStatus = getBotGitStatus(id);
   let status = 'offline';
   if (active) {
-    if (active.process && active.process.pid && !active.process.killed) {
+    if (active.manuallyStopped || active.status === 'offline' || active.status === 'stopped_by_user') {
+      status = 'offline';
+    } else if (active.status === 'restarting') {
+      status = 'starting';
+    } else if (active.process && active.process.pid && !active.process.killed) {
       status = 'online';
     } else {
       status = active.status;

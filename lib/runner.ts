@@ -339,17 +339,19 @@ export async function stopBot(botId: string): Promise<{ success: boolean; messag
 
   if (pid) {
     if (process.platform === 'win32') {
-      exec(`taskkill /pid ${pid} /T /F`, () => {});
+      try { execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' }); } catch {}
     } else {
-      try {
-        active.process.kill('SIGKILL');
-      } catch {
-        active.process.kill('SIGTERM');
-      }
+      try { process.kill(-pid, 'SIGKILL'); } catch {}
+      try { process.kill(pid, 'SIGKILL'); } catch {}
+      try { active.process.kill('SIGKILL'); } catch {}
+      try { execSync(`kill -9 ${pid} 2>/dev/null`, { stdio: 'ignore' }); } catch {}
     }
   }
 
+  active.process = null as any;
+  active.status = 'offline';
   active.stats = { cpu: 0, memory: 0, uptime: 0 };
+  broadcastLog(botId, `⚪ [Host Manager] Bot arrestato.`);
   return { success: true, message: 'Bot arrestato con successo' };
 }
 
