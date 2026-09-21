@@ -58,6 +58,14 @@ export const BotCard = ({ bot, onSelect, onPowerAction, isActionLoading }: BotCa
                 <span className="text-xs text-zinc-500 truncate max-w-[120px] font-mono">
                   {bot.config.mainFile}
                 </span>
+                {bot.config.bootOrder && (
+                  <span
+                    className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 rounded"
+                    title={`Ordine di avvio: #${bot.config.bootOrder}${bot.config.startDelay ? ` (Ritardo: ${bot.config.startDelay}s)` : ''}`}
+                  >
+                    #{bot.config.bootOrder}
+                  </span>
+                )}
               </div>
             </div>
           </div>

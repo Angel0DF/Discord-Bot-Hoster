@@ -29,7 +29,8 @@ export interface BotConfig {
   restartDelay: number; // ms
   gitRepo?: string; // e.g. "https://github.com/user/repo"
   gitBranch?: string; // e.g. "main"
-  autoDeployWebhook?: boolean;
+  bootOrder?: number; // 1 = first, 2 = second, etc.
+  startDelay?: number; // delay in seconds before starting bot on boot
   createdAt: string;
   updatedAt: string;
 }

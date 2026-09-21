@@ -180,6 +180,33 @@ export const ApiClient = {
     }
   },
 
+  async reorderBots(orders: Array<{ id: string; bootOrder: number; startDelay?: number }>): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(`${base}/api/bots/reorder`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ orders }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async startAllInOrder(): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(`${base}/api/bots/start-all-in-order`, {
+        method: "POST",
+        headers: getHeaders(),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
   getLogsSseUrl(id: string): string {
     const base = getBaseUrl();
     const config = getStoredAgentConfig();

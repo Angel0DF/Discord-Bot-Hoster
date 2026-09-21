@@ -730,6 +730,46 @@ app.delete('/api/bots/:id', (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/bots/reorder', (req, res) => {
+  const { orders } = req.body;
+  if (!Array.isArray(orders)) return res.status(400).json({ success: false, error: 'Formato ordini non valido' });
+
+  const bots = getBots();
+  for (const item of orders) {
+    const b = bots.find((x) => x.id === item.id);
+    if (b) {
+      if (typeof item.bootOrder === 'number') b.bootOrder = item.bootOrder;
+      if (typeof item.startDelay === 'number') b.startDelay = item.startDelay;
+      b.updatedAt = new Date().toISOString();
+      const active = activeProcesses.get(b.id);
+      if (active) active.config = b;
+    }
+  }
+  saveBots(bots);
+  res.json({ success: true, message: 'Ordine di avvio salvato con successo' });
+});
+
+app.post('/api/bots/start-all-in-order', async (req, res) => {
+  const bots = getBots();
+  const sorted = [...bots].sort((a, b) => (a.bootOrder ?? 999) - (b.bootOrder ?? 999));
+  
+  (async () => {
+    for (const bot of sorted) {
+      const delay = (bot.startDelay || 0) * 1000;
+      if (delay > 0) {
+        broadcastLog(bot.id, `⏳ [Boot Order] Attesa di ${bot.startDelay}s prima dell'avvio...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+      startBotProcess(bot.id);
+      if (delay === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  })();
+
+  res.json({ success: true, message: 'Avvio sequenziale di tutti i bot iniziato' });
+});
+
 app.post('/api/bots/:id/power', (req, res) => {
   const { id } = req.params;
   const { action } = req.body;
@@ -1014,16 +1054,28 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [Proxmox Bot Hoster Agent] In ascolto sulla porta ${PORT}`);
   console.log(`🔑 Secret Key configurata: ${SECRET_KEY ? 'Presente' : 'Disabilitata'}`);
 
-  // Auto-Boot: Automatically restore and start all active bots on server startup/reboot
-  setTimeout(() => {
+  // Auto-Boot: Automatically restore and start all active bots in configured order on server startup/reboot
+  setTimeout(async () => {
     const bots = getBots();
     console.log(`🔄 [Auto-Boot] Controllo bot da avviare automaticamente all'avvio (${bots.length} configurati)...`);
-    bots.forEach((bot) => {
-      if (bot.enabled !== false && bot.autoRestart !== false) {
-        console.log(`🟢 [Auto-Boot] Avvio automatico bot: ${bot.name} (ID: ${bot.id})`);
-        startBotProcess(bot.id);
+
+    const eligibleBots = bots
+      .filter((bot) => bot.enabled !== false && bot.autoRestart !== false)
+      .sort((a, b) => (a.bootOrder ?? 999) - (b.bootOrder ?? 999));
+
+    for (const bot of eligibleBots) {
+      const delaySec = bot.startDelay || 0;
+      if (delaySec > 0) {
+        console.log(`⏳ [Auto-Boot] Attesa programmata di ${delaySec}s prima di avviare #${bot.bootOrder || 'default'}: ${bot.name}...`);
+        await new Promise((r) => setTimeout(r, delaySec * 1000));
       }
-    });
+      console.log(`🟢 [Auto-Boot] Avvio automatico bot #${bot.bootOrder || 1}: ${bot.name} (ID: ${bot.id})`);
+      startBotProcess(bot.id);
+
+      if (delaySec === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
   }, 1500);
 });
 

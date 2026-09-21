@@ -9,10 +9,11 @@ import { CreateBotModal } from "@/components/create-bot-modal";
 import { ConnectionModal } from "@/components/connection-modal";
 import { GitHubConnectModal } from "@/components/github-connect-modal";
 import { ProxmoxSetupGuide } from "@/components/proxmox-setup-guide";
+import { BootOrderModal } from "@/components/boot-order-modal";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
-import { Bot, Plus, Server, Layers, Sparkles, HelpCircle, WifiOff } from "lucide-react";
+import { Bot, Plus, Server, Layers, Sparkles, HelpCircle, WifiOff, ArrowUpDown } from "lucide-react";
 import { ApiClient, getStoredAgentConfig } from "@/lib/api-client";
 
 export default function Home() {
@@ -22,6 +23,7 @@ export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
+  const [isBootOrderModalOpen, setIsBootOrderModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<"bots" | "proxmox">("bots");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -200,6 +202,16 @@ export default function Home() {
                   >
                     ⚙️ Impostazioni Server Proxmox
                   </button>
+                  {bots.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsBootOrderModalOpen(true)}
+                      className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+                    >
+                      <ArrowUpDown className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Ordine di Avvio</span>
+                    </button>
+                  )}
                   {bots.length > 0 && (
                     <button
                       type="button"
@@ -276,6 +288,14 @@ export default function Home() {
         isOpen={isGitHubModalOpen}
         onClose={() => setIsGitHubModalOpen(false)}
         onAccountChanged={refreshAll}
+      />
+
+      {/* Boot Order & Sequence Modal */}
+      <BootOrderModal
+        isOpen={isBootOrderModalOpen}
+        onClose={() => setIsBootOrderModalOpen(false)}
+        bots={bots}
+        onBotsUpdated={fetchBots}
       />
     </div>
   );

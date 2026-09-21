@@ -24,6 +24,8 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
   const [gitBranch, setGitBranch] = useState(bot.config.gitBranch || "main");
   const [autoRestart, setAutoRestart] = useState(bot.config.autoRestart);
   const [maxRestarts, setMaxRestarts] = useState(bot.config.maxRestarts || 5);
+  const [bootOrder, setBootOrder] = useState<number>(bot.config.bootOrder || 1);
+  const [startDelay, setStartDelay] = useState<number>(bot.config.startDelay || 0);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
@@ -46,6 +48,8 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
         gitBranch: gitBranch.trim() || "main",
         autoRestart,
         maxRestarts: Number(maxRestarts),
+        bootOrder: Number(bootOrder),
+        startDelay: Number(startDelay),
       });
 
       if (data.success) {
@@ -217,6 +221,58 @@ export const BotSettings = ({ bot, onUpdate, onDelete }: BotSettingsProps) => {
                 />
               </div>
             )}
+          </div>
+
+          {/* Boot Order and Startup Delay */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                <span>Ordine e Priorità di Avvio (Auto-Boot)</span>
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                Imposta la sequenza di avvio dei bot al riavvio del server. Es: imposta <strong>1</strong> per Lavalink (si avvia per primo) e <strong>2</strong> per MBOT (si avvia dopo).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  Posizione / Priorità (1 = Primo)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={bootOrder}
+                    onChange={(e) => setBootOrder(Math.max(1, Number(e.target.value)))}
+                    className="w-24 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[11px] text-zinc-400 font-medium">
+                    {bootOrder === 1 ? "🥇 Primo ad avviarsi" : `#${bootOrder} nella sequenza`}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  Ritardo di Avvio (Secondi di attesa)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={180}
+                    value={startDelay}
+                    onChange={(e) => setStartDelay(Math.max(0, Number(e.target.value)))}
+                    className="w-24 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[11px] text-zinc-400">
+                    {startDelay === 0 ? "Nessun ritardo" : `Attende ${startDelay}s prima di partire`}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end pt-4">

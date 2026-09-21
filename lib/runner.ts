@@ -410,14 +410,23 @@ let isAutoBootStarted = false;
 function triggerAutoBoot() {
   if (isAutoBootStarted) return;
   isAutoBootStarted = true;
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       const all = getAllBots();
-      all.forEach((bot: any) => {
-        if (bot.enabled !== false && bot.autoRestart !== false) {
-          startBot(bot.id);
+      const eligible = all
+        .filter((bot: any) => bot.enabled !== false && bot.autoRestart !== false)
+        .sort((a: any, b: any) => (a.bootOrder ?? 999) - (b.bootOrder ?? 999));
+
+      for (const bot of eligible) {
+        const delay = (bot.startDelay || 0) * 1000;
+        if (delay > 0) {
+          await new Promise((r) => setTimeout(r, delay));
         }
-      });
+        startBot(bot.id);
+        if (delay === 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     } catch {}
   }, 2000);
 }
